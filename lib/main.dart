@@ -12,12 +12,12 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: FirebaseOptions(
-      apiKey: "AIzaSyAnKF31ldQCmllCpDvyB5Q0xnZLdQx1WaQ",
-      authDomain: "fluttert-map-mapbox-gl-js.firebaseapp.com",
-      projectId: "fluttert-map-mapbox-gl-js",
-      storageBucket: "fluttert-map-mapbox-gl-js.firebasestorage.app",
-      messagingSenderId: "565383023365",
-      appId: "1:565383023365:web:aafa2cc0fd3c32aea3856c",
+      apiKey: "AIzaSyArnp-m9We6czQVhW9Au98QnCoRE9gP3Lw",
+      authDomain: "flutter-map-app-b1d43.firebaseapp.com",
+      projectId: "flutter-map-app-b1d43",
+      storageBucket: "flutter-map-app-b1d43.firebasestorage.app",
+      messagingSenderId: "795028306182",
+      appId: "1:795028306182:web:2cf52841931c37ad3f4687"
     ),
   );
 
@@ -193,3 +193,4 @@ class _SignUpPageState extends State<SignUpPage> {
     );
   }
 }
+
