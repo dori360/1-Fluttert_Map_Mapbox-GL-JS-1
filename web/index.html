@@ -17,39 +17,29 @@
     <script>
       // Set your Mapbox access token.
       mapboxgl.accessToken = 'pk.eyJ1IjoiZGFtb3NzIiwiYSI6ImNtNnRyZzk5MTA2NzkyaXExN2EyNTR1dWsifQ.UdaXenvYULYz6lkQbLU1hg';
-      
       function initializeMap() {
-        // Retry function: wait until the Flutter-created container is in the DOM.
+        // Wait for the Flutter-created container in the DOM.
         const tryInitialize = (retries) => {
           const container = document.getElementById('mapbox-map');
           if (container) {
-            console.log("Container found, initializing Mapbox map.");
-            // Use a default location (San Francisco) as a fallback.
-            const defaultLocation = [-122.4194, 37.7749];
+            const defaultLocation = [-122.4194, 37.7749]; // Fallback location.
             const map = new mapboxgl.Map({
               container: 'mapbox-map',
               style: 'mapbox://styles/mapbox/streets-v11',
               center: defaultLocation,
               zoom: 12
             });
-            
-            // Add navigation controls.
             map.addControl(new mapboxgl.NavigationControl());
-            
-            // Add GeolocateControl (built-in location button)
             const geolocateControl = new mapboxgl.GeolocateControl({
               positionOptions: { enableHighAccuracy: true },
               trackUserLocation: true,
               showUserHeading: true
             });
             map.addControl(geolocateControl);
-            
-            // Attempt to get the user's current location.
             if (navigator.geolocation) {
               navigator.geolocation.getCurrentPosition(
                 (position) => {
                   const userCoordinates = [position.coords.longitude, position.coords.latitude];
-                  console.log("Auto-flying to current location:", userCoordinates);
                   map.flyTo({
                     center: userCoordinates,
                     zoom: 16,
@@ -61,8 +51,6 @@
                 },
                 { enableHighAccuracy: true }
               );
-            } else {
-              console.error("Geolocation is not supported by this browser.");
             }
           } else {
             if (retries > 0) {
@@ -74,7 +62,6 @@
         };
         tryInitialize(10);
       }
-      
       window.addEventListener('load', () => {
         // Delay initialization to ensure the Flutter element is in the DOM.
         setTimeout(initializeMap, 500);
@@ -86,5 +73,3 @@
     <script src="main.dart.js"></script>
   </body>
 </html>
-
-
