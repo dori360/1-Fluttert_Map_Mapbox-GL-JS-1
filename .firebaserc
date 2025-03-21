@@ -1,0 +1,5 @@
+{
+  "projects": {
+    "default": "fluttert-map-mapbox-gl-js"
+  }
+}

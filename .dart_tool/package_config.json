@@ -116,6 +116,24 @@
       "languageVersion": "3.2"
     },
     {
+      "name": "firebase_storage",
+      "rootUri": "file:///Users/pc/.pub-cache/hosted/pub.dev/firebase_storage-11.7.7",
+      "packageUri": "lib/",
+      "languageVersion": "2.18"
+    },
+    {
+      "name": "firebase_storage_platform_interface",
+      "rootUri": "file:///Users/pc/.pub-cache/hosted/pub.dev/firebase_storage_platform_interface-5.1.22",
+      "packageUri": "lib/",
+      "languageVersion": "2.18"
+    },
+    {
+      "name": "firebase_storage_web",
+      "rootUri": "file:///Users/pc/.pub-cache/hosted/pub.dev/firebase_storage_web-3.9.7",
+      "packageUri": "lib/",
+      "languageVersion": "3.2"
+    },
+    {
       "name": "fixnum",
       "rootUri": "file:///Users/pc/.pub-cache/hosted/pub.dev/fixnum-1.1.1",
       "packageUri": "lib/",
@@ -180,6 +198,12 @@
       "rootUri": "file:///Users/pc/.pub-cache/hosted/pub.dev/geolocator_windows-0.2.3",
       "packageUri": "lib/",
       "languageVersion": "2.15"
+    },
+    {
+      "name": "http",
+      "rootUri": "file:///Users/pc/.pub-cache/hosted/pub.dev/http-1.3.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.4"
     },
     {
       "name": "http_parser",
@@ -374,7 +398,7 @@
       "languageVersion": "3.6"
     }
   ],
-  "generated": "2025-03-18T20:54:11.222761Z",
+  "generated": "2025-03-20T19:37:44.959755Z",
   "generator": "pub",
   "generatorVersion": "3.7.2",
   "flutterRoot": "file:///Users/pc/Downloads/flutter",

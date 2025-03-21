@@ -11,15 +11,16 @@ dependencies:
   flutter:
     sdk: flutter
   firebase_core: ^2.20.1
-  firebase_auth: ^4.9.1        # Use a version that pulls the fixed web package.
+  firebase_auth: ^4.9.1
   cloud_firestore: ^4.5.1
+  firebase_storage: ^11.0.0  # Added for image uploads
   cupertino_icons: ^1.0.8
   mapbox_gl: ^0.16.0
   geolocator: ^12.0.0
-  js: ^0.6.4                 # Ensure the js package is included
+  js: ^0.6.4
 
 dependency_overrides:
-  firebase_auth_web: ^5.8.14  # Force the latest fixed version for web interop
+  firebase_auth_web: ^5.8.14
 
 dev_dependencies:
   flutter_test:

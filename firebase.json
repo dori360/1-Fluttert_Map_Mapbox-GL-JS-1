@@ -1,0 +1,27 @@
+{
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/storage/**",
+        "destination": "/storage/fluttert-map-mapbox-gl-js/${req.path.replace('/storage/', '')}"
+      }
+    ],
+    "headers": [
+      {
+        "source": "/storage/**",
+        "headers": [
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
+          }
+        ]
+      }
+    ]
+  }
+}
