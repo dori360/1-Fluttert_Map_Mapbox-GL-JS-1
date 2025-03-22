@@ -9,7 +9,7 @@
     "rewrites": [
       {
         "source": "/storage/**",
-        "destination": "/storage/fluttert-map-mapbox-gl-js/${req.path.replace('/storage/', '')}"
+        "destination": "/storage/mapbox-in-javascript/${req.path.replace('/storage/', '')}"
       }
     ],
     "headers": [
@@ -25,3 +25,4 @@
     ]
   }
 }
+
