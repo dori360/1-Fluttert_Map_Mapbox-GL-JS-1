@@ -53,10 +53,16 @@
       window.setCurrentUserId = setCurrentUserId;
 
       function setProfilePicture(url) {
-        profilePictureUrl = url;
-        console.log("Setting profile picture:", url);
-        updateUserMarker();
-      }
+      profilePictureUrl = url;
+      console.log("Setting profile picture:", url);
+  
+  // Update user's own marker immediately if it exists
+  if (userMarker) {
+    const el = userMarker.getElement();
+    el.style.backgroundImage = `url(${url})`;
+    console.log("Updated user marker with new profile picture");
+  }
+}
 
       function forceUpdateLocation() {
         // Directly try to get the user's location

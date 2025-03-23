@@ -18,3 +18,6 @@ samples, guidance on mobile development, and a full API reference.
 # V1.0.4
 This version has authentication right , users can change the picture  , but when changing the picture it doesn't show instantly. you have to refresh the page to update. 
 
+# V1.0.5
+now pictures change instantly on the map 
+

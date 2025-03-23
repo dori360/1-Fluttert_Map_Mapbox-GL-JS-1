@@ -67,6 +67,8 @@ class _MapScreenState extends State<MapScreen> {
   Timer? _locationUpdateTimer;
   Timer? _fetchUsersTimer;
   StreamSubscription<User?>? _authSubscription;
+  // New subscription for Firestore real-time updates
+  StreamSubscription<QuerySnapshot>? _userLocationsSubscription;
   String? _currentUserId;
   bool _isUserLoggedIn = false;
   
@@ -105,6 +107,7 @@ class _MapScreenState extends State<MapScreen> {
     _authSubscription?.cancel();
     _locationUpdateTimer?.cancel();
     _fetchUsersTimer?.cancel();
+    _userLocationsSubscription?.cancel();
     super.dispose();
   }
   
@@ -129,7 +132,59 @@ class _MapScreenState extends State<MapScreen> {
     _locationUpdateTimer = null;
   }
 
+  // New real-time listener approach
   void _startFetchingUserLocations() {
+    _fetchUsersTimer?.cancel();
+    _fetchUsersTimer = null;
+    
+    // Cancel any existing subscription
+    _userLocationsSubscription?.cancel();
+    
+    // Set up a real-time listener for user location changes
+    _userLocationsSubscription = FirebaseFirestore.instance
+      .collection('user_locations')
+      .snapshots()
+      .listen((snapshot) {
+        final Map<String, Map<String, dynamic>> users = {};
+        
+        print("Got ${snapshot.docs.length} user location documents (real-time)");
+        
+        for (var doc in snapshot.docs) {
+          try {
+            final String uid = doc.id;
+            
+            // Skip current user
+            if (uid == _currentUserId) continue;
+            
+            final Map<String, dynamic> data = doc.data();
+            
+            // Only include users with valid location data
+            if (data.containsKey('longitude') && data.containsKey('latitude')) {
+              users[uid] = {
+                'longitude': data['longitude'],
+                'latitude': data['latitude'],
+                'photoURL': data['photoURL'] ?? 'https://via.placeholder.com/40',
+                'displayName': data['displayName'] ?? 'User',
+                'lastUpdated': data['lastUpdated'] ?? DateTime.now().millisecondsSinceEpoch,
+              };
+            }
+          } catch (e) {
+            print("Error processing document ${doc.id}: $e");
+          }
+        }
+        
+        // Update markers via JavaScript
+        js.context.callMethod('updateOtherUsersMarkers', [js.JsObject.jsify(users)]);
+        print("Updated markers with ${users.length} users (real-time)");
+      }, onError: (error) {
+        print("Error in Firestore listener: $error");
+        // Fall back to periodic updates if the listener fails
+        _startPeriodicFetching();
+      });
+  }
+
+  // Fallback method if real-time listener fails
+  void _startPeriodicFetching() {
     _fetchUsersTimer?.cancel();
     // Fetch locations immediately
     _fetchUserLocations();
@@ -142,6 +197,11 @@ class _MapScreenState extends State<MapScreen> {
   void _stopFetchingUserLocations() {
     _fetchUsersTimer?.cancel();
     _fetchUsersTimer = null;
+    
+    // Cancel the Firestore subscription
+    _userLocationsSubscription?.cancel();
+    _userLocationsSubscription = null;
+    
     // Clear markers
     js.context.callMethod('updateOtherUsersMarkers', [js.JsObject.jsify({})]);
   }
@@ -317,7 +377,7 @@ class _MapScreenState extends State<MapScreen> {
           },
         );
         
-        // Parse the response - THIS IS THE LINE THAT NEEDS TO BE FIXED
+        // Parse the response
         final data = json.decode(response.responseText ?? '{}');
         if (data != null && data.containsKey('documents')) {
           final List<dynamic> documents = data['documents'];
@@ -409,99 +469,59 @@ class _MapScreenState extends State<MapScreen> {
 
 void _uploadProfilePicture(BuildContext context) {
   final input = FileUploadInputElement()..accept = 'image/*';
-  
   input.onChange.listen((e) async {
     final files = input.files;
-    if (files == null || files.isEmpty) return;
-    
-    final file = files.first;
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      print("No authenticated user found");
-      return;
-    }
-    
-    print("Starting upload for user: ${user.uid}");
-    
-    try {
-      // Read file
-      final reader = FileReader();
-      final completer = Completer<Uint8List>();
-      reader.onLoadEnd.listen((e) {
-        if (reader.readyState == FileReader.DONE) {
-          completer.complete(reader.result as Uint8List);
+    if (files != null && files.isNotEmpty) {
+      final file = files.first;
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        try {
+          final reader = FileReader();
+          final completer = Completer<Uint8List>();
+          reader.onLoadEnd.listen((e) {
+            if (reader.readyState == FileReader.DONE) {
+              completer.complete(reader.result as Uint8List);
+            }
+          });
+          reader.readAsArrayBuffer(file);
+          final data = await completer.future;
+
+          final storageRef =
+              FirebaseStorage.instance.ref().child('profile_pictures/${user.uid}/profile.jpg');
+          final uploadTask = storageRef.putData(data);
+          await uploadTask;
+          final downloadUrl = await storageRef.getDownloadURL();
+          await user.updateProfile(photoURL: downloadUrl);
+          
+          // Also update it in the user location document
+          await FirebaseFirestore.instance
+              .collection('user_locations')
+              .doc(user.uid)
+              .update({
+                'photoURL': downloadUrl,
+              });
+          
+          // Update it in JavaScript - this will update both the UI and map marker
+          js.context.callMethod('setProfilePicture', [downloadUrl]);
+          
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Profile picture updated')),
+            );
+          }
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to update profile picture: $e')),
+            );
+          }
         }
-      });
-      reader.readAsArrayBuffer(file);
-      final data = await completer.future;
-      print("File size: ${data.length} bytes");
-      
-      // Create a direct reference to the profile picture
-      final filePath = 'profile_pictures/${user.uid}.jpg';
-      print("Uploading to: $filePath");
-      
-      // Create storage reference
-      final Reference storageRef = FirebaseStorage.instance.ref().child(filePath);
-      
-      // Configure metadata (optional but can help)
-      final metadata = SettableMetadata(
-        contentType: 'image/jpeg',
-        customMetadata: {'userId': user.uid},
-      );
-      
-      // Start upload with metadata
-      final uploadTask = storageRef.putData(data, metadata);
-      
-      // Monitor upload
-      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-        print("Upload progress: ${snapshot.bytesTransferred}/${snapshot.totalBytes}");
-      });
-      
-      // Wait for upload to complete
-      await uploadTask;
-      print("Upload completed");
-      
-      // Get the download URL
-      final downloadUrl = await storageRef.getDownloadURL();
-      print("Download URL: $downloadUrl");
-      
-      // Update user profile
-      await user.updateProfile(photoURL: downloadUrl);
-      print("Updated auth profile");
-      
-      // Update Firestore
-      await FirebaseFirestore.instance
-          .collection('user_locations')
-          .doc(user.uid)
-          .update({'photoURL': downloadUrl});
-      print("Updated Firestore document");
-      
-      // Update JavaScript
-      js.context.callMethod('setProfilePicture', [downloadUrl]);
-      
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile picture updated')),
-        );
-      }
-      
-    } catch (e) {
-      print("ERROR: $e");
-      if (e is FirebaseException) {
-        print("Firebase error code: ${e.code}");
-        print("Firebase error message: ${e.message}");
-      }
-      
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update profile picture: $e')),
-        );
       }
     }
   });
-  
   input.click();
 }
+
 
   @override
   Widget build(BuildContext context) {
@@ -851,3 +871,4 @@ class _SignUpDialogState extends State<SignUpDialog> {
     );
   }
 }
+
