@@ -15,3 +15,6 @@ For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
 
+# V1.0.4
+This version has authentication right , users can change the picture  , but when changing the picture it doesn't show instantly. you have to refresh the page to update. 
+

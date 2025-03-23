@@ -3,9 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <title>My Flutter Mapbox App</title>
-    <!-- Include Mapbox GL JS CSS -->
     <link href="https://api.mapbox.com/mapbox-gl-js/v2.7.0/mapbox-gl.css" rel="stylesheet" />
-    <!-- Include Mapbox GL JS -->
     <script src="https://api.mapbox.com/mapbox-gl-js/v2.7.0/mapbox-gl.js"></script>
     <style>
       html, body {
@@ -13,63 +11,232 @@
         padding: 0;
         height: 100%;
       }
+      
+      .user-marker {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background-size: cover;
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      }
+      
+      .current-user-marker {
+        border: 3px solid #0066ff;
+      }
+      
+      .other-user-marker {
+        border: 3px solid #ff6600;
+      }
+      
+      .mapboxgl-popup-content {
+        padding: 10px;
+        text-align: center;
+      }
     </style>
     <script>
-      // Set your Mapbox access token.
       mapboxgl.accessToken = 'pk.eyJ1IjoiZGFtb3NzIiwiYSI6ImNtNnRyZzk5MTA2NzkyaXExN2EyNTR1dWsifQ.UdaXenvYULYz6lkQbLU1hg';
+
+      let map;
+      let userLocation = null;
+      let profilePictureUrl = null;
+      let userMarker = null;
+      let otherUsersMarkers = {};
+      
+      // Store the current user ID
+      let currentUserId = null;
+      
+      function setCurrentUserId(uid) {
+        currentUserId = uid;
+        console.log("Setting current user ID:", uid);
+      }
+      window.setCurrentUserId = setCurrentUserId;
+
+      function setProfilePicture(url) {
+        profilePictureUrl = url;
+        console.log("Setting profile picture:", url);
+        updateUserMarker();
+      }
+
+      function forceUpdateLocation() {
+        // Directly try to get the user's location
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              console.log("FORCE GOT LOCATION:", position.coords);
+              userLocation = [position.coords.longitude, position.coords.latitude];
+              updateUserMarker();
+              
+              // This is critical - making user location accessible to Flutter
+              window.userLocation = userLocation;
+              console.log("Updated window.userLocation:", window.userLocation);
+              
+              // If map exists, fly to the location
+              if (map) {
+                map.flyTo({
+                  center: userLocation,
+                  zoom: 15,
+                  speed: 1.2
+                });
+              }
+            },
+            (error) => {
+              console.error("Error getting user location:", error);
+            },
+            { 
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 0
+            }
+          );
+        } else {
+          console.error("Geolocation is not supported by this browser");
+        }
+      }
+      window.forceUpdateLocation = forceUpdateLocation;
+
+      function updateUserMarker() {
+        if (!map) return;
+        
+        if (userLocation) {
+          if (userMarker) {
+            userMarker.setLngLat(userLocation);
+          } else {
+            const el = document.createElement('div');
+            el.className = 'user-marker current-user-marker';
+            el.style.backgroundImage = profilePictureUrl ? 
+              `url(${profilePictureUrl})` : 
+              `url(https://via.placeholder.com/40)`;
+            
+            userMarker = new mapboxgl.Marker({ element: el })
+              .setLngLat(userLocation)
+              .addTo(map);
+          }
+        }
+      }
+
+      function updateOtherUsersMarkers(usersData) {
+        console.log("Updating other users markers:", usersData);
+        
+        if (!map || !currentUserId) {
+          console.warn("Map or current user ID not initialized yet");
+          return;
+        }
+        
+        // Clear old markers
+        for (const uid in otherUsersMarkers) {
+          otherUsersMarkers[uid].remove();
+        }
+        otherUsersMarkers = {};
+        
+        // Skip if empty data
+        if (!usersData || Object.keys(usersData).length === 0) {
+          console.log("No other users to display");
+          return;
+        }
+        
+        // Add markers for each user
+        for (const uid in usersData) {
+          try {
+            // Skip if this is the current user
+            if (uid === currentUserId) continue;
+            
+            const userData = usersData[uid];
+            
+            // Skip if no valid location data
+            if (!userData || !userData.longitude || !userData.latitude) {
+              console.warn(`Invalid location data for user ${uid}`);
+              continue;
+            }
+            
+            // Create marker element
+            const el = document.createElement('div');
+            el.className = 'user-marker other-user-marker';
+            el.style.backgroundImage = userData.photoURL ? 
+              `url(${userData.photoURL})` : 
+              `url(https://via.placeholder.com/40)`;
+            
+            // Create popup with user info
+            const popup = new mapboxgl.Popup({ offset: 25 })
+              .setHTML(`<strong>${userData.displayName || 'User'}</strong>`);
+            
+            // Create the marker
+            const marker = new mapboxgl.Marker({ element: el })
+              .setLngLat([userData.longitude, userData.latitude])
+              .setPopup(popup)
+              .addTo(map);
+            
+            otherUsersMarkers[uid] = marker;
+          } catch (err) {
+            console.error(`Error creating marker for user ${uid}:`, err);
+          }
+        }
+        
+        console.log(`Added ${Object.keys(otherUsersMarkers).length} user markers to map`);
+      }
+      window.updateOtherUsersMarkers = updateOtherUsersMarkers;
+
       function initializeMap() {
-        // Wait for the Flutter-created container in the DOM.
         const tryInitialize = (retries) => {
           const container = document.getElementById('mapbox-map');
           if (container) {
-            const defaultLocation = [-122.4194, 37.7749]; // Fallback location.
-            const map = new mapboxgl.Map({
+            console.log("Initializing map...");
+            const defaultLocation = [-122.4194, 37.7749];
+            map = new mapboxgl.Map({
               container: 'mapbox-map',
               style: 'mapbox://styles/mapbox/streets-v11',
               center: defaultLocation,
-              zoom: 12
+              zoom: 12,
             });
+            
             map.addControl(new mapboxgl.NavigationControl());
+            
             const geolocateControl = new mapboxgl.GeolocateControl({
               positionOptions: { enableHighAccuracy: true },
               trackUserLocation: true,
-              showUserHeading: true
+              showUserHeading: true,
             });
+            
             map.addControl(geolocateControl);
-            if (navigator.geolocation) {
-              navigator.geolocation.getCurrentPosition(
-                (position) => {
-                  const userCoordinates = [position.coords.longitude, position.coords.latitude];
-                  map.flyTo({
-                    center: userCoordinates,
-                    zoom: 16,
-                    speed: 1.2
-                  });
-                },
-                (error) => {
-                  console.error("Error fetching current location:", error);
-                },
-                { enableHighAccuracy: true }
-              );
-            }
+
+            // When user location is found through the geolocation control
+            geolocateControl.on('geolocate', (position) => {
+              console.log("Geolocated user position:", position.coords);
+              userLocation = [position.coords.longitude, position.coords.latitude];
+              
+              // This is key - expose the location to Flutter
+              window.userLocation = userLocation;
+              console.log("Set window.userLocation:", window.userLocation);
+              
+              updateUserMarker();
+            });
+
+            // When map is loaded, force a location update
+            map.on('load', () => {
+              console.log("Map loaded, forcing location update");
+              setTimeout(() => {
+                forceUpdateLocation();
+              }, 1000);
+            });
+            
+            console.log("Map initialization complete");
+          } else if (retries > 0) {
+            setTimeout(() => tryInitialize(retries - 1), 500);
           } else {
-            if (retries > 0) {
-              setTimeout(() => { tryInitialize(retries - 1); }, 500);
-            } else {
-              console.error("Container with id 'mapbox-map' not found after waiting.");
-            }
+            console.error("Container 'mapbox-map' not found after retries");
           }
         };
+        
         tryInitialize(10);
       }
+
       window.addEventListener('load', () => {
-        // Delay initialization to ensure the Flutter element is in the DOM.
+        console.log("Window loaded, initializing map...");
         setTimeout(initializeMap, 500);
       });
     </script>
   </head>
   <body>
-    <!-- Flutter will inject its content here -->
     <script src="main.dart.js"></script>
   </body>
 </html>
