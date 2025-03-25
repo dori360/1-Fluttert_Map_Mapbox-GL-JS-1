@@ -21,3 +21,8 @@ This version has authentication right , users can change the picture  , but when
 # V1.0.5
 now pictures change instantly on the map 
 
+# V1.0.6
+Now Users can message each other. 
+But there are some minor errors in the console. 
+Ai will still need to be added to this program. 
+

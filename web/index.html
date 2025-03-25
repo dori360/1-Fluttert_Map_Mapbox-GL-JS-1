@@ -19,6 +19,13 @@
         background-size: cover;
         cursor: pointer;
         box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        transition: all 0.3s ease;
+      }
+      
+      .user-marker:hover {
+        transform: scale(1.2);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+        z-index: 100;
       }
       
       .current-user-marker {
@@ -32,6 +39,37 @@
       .mapboxgl-popup-content {
         padding: 10px;
         text-align: center;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      }
+      
+      .user-stats-popup {
+        position: absolute;
+        background-color: rgba(0,0,0,0.9);
+        color: white;
+        padding: 12px;
+        border-radius: 12px;
+        font-size: 13px;
+        max-width: 200px;
+        z-index: 1000;
+        pointer-events: none;
+        display: none;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        border: 1px solid rgba(255,255,255,0.2);
+        backdrop-filter: blur(2px);
+      }
+      
+      .user-stats-popup strong {
+        color: #ff9900;
+        display: block;
+        margin-bottom: 5px;
+        font-size: 14px;
+      }
+      
+      .user-stats-popup div {
+        margin-bottom: 3px;
+        padding-left: 5px;
+        border-left: 2px solid #ff9900;
       }
     </style>
     <script>
@@ -52,17 +90,19 @@
       }
       window.setCurrentUserId = setCurrentUserId;
 
+      // Enhanced setProfilePicture function to update markers immediately
       function setProfilePicture(url) {
-      profilePictureUrl = url;
-      console.log("Setting profile picture:", url);
-  
-  // Update user's own marker immediately if it exists
-  if (userMarker) {
-    const el = userMarker.getElement();
-    el.style.backgroundImage = `url(${url})`;
-    console.log("Updated user marker with new profile picture");
-  }
-}
+        profilePictureUrl = url;
+        console.log("Setting profile picture:", url);
+        
+        // Update user's own marker immediately if it exists
+        if (userMarker) {
+          const el = userMarker.getElement();
+          el.style.backgroundImage = `url(${url})`;
+          console.log("Updated user marker with new profile picture");
+        }
+      }
+      window.setProfilePicture = setProfilePicture;
 
       function forceUpdateLocation() {
         // Directly try to get the user's location
@@ -132,6 +172,12 @@
         // Clear old markers
         for (const uid in otherUsersMarkers) {
           otherUsersMarkers[uid].remove();
+          
+          // Also remove any existing stat popups
+          const existingPopup = document.getElementById(`stats-popup-${uid}`);
+          if (existingPopup) {
+            existingPopup.remove();
+          }
         }
         otherUsersMarkers = {};
         
@@ -158,9 +204,21 @@
             // Create marker element
             const el = document.createElement('div');
             el.className = 'user-marker other-user-marker';
+            el.id = `marker-${uid}`;
             el.style.backgroundImage = userData.photoURL ? 
               `url(${userData.photoURL})` : 
               `url(https://via.placeholder.com/40)`;
+            
+            // Add click event to show profile
+            el.addEventListener('click', () => {
+              console.log(`User marker clicked: ${uid}`);
+              // Close any open popups first to avoid accessibility issues
+              closeAllPopups();
+              // Call the Dart function to show user profile
+              if (window.showUserProfile) {
+                window.showUserProfile(uid);
+              }
+            });
             
             // Create popup with user info
             const popup = new mapboxgl.Popup({ offset: 25 })
@@ -172,6 +230,37 @@
               .setPopup(popup)
               .addTo(map);
             
+            // Add stats popup for hover
+            const statsPopup = document.createElement('div');
+            statsPopup.className = 'user-stats-popup';
+            statsPopup.id = `stats-popup-${uid}`;
+            
+            // Build stats HTML
+            let statsHTML = `<strong>${userData.displayName || 'User'}</strong>`;
+            
+            if (userData.age) statsHTML += `<div>Age: ${userData.age}</div>`;
+            if (userData.height) statsHTML += `<div>Height: ${userData.height} cm</div>`;
+            if (userData.weight) statsHTML += `<div>Weight: ${userData.weight} kg</div>`;
+            if (userData.bodyType) statsHTML += `<div>Body Type: ${userData.bodyType}</div>`;
+            if (userData.sexuality) statsHTML += `<div>Sexuality: ${userData.sexuality}</div>`;
+            
+            statsPopup.innerHTML = statsHTML;
+            
+            // Append to body
+            document.body.appendChild(statsPopup);
+            
+            // Show stats on hover
+            el.addEventListener('mouseenter', () => {
+              const markerRect = el.getBoundingClientRect();
+              statsPopup.style.left = (markerRect.right + 10) + 'px';
+              statsPopup.style.top = markerRect.top + 'px';
+              statsPopup.style.display = 'block';
+            });
+            
+            el.addEventListener('mouseleave', () => {
+              statsPopup.style.display = 'none';
+            });
+            
             otherUsersMarkers[uid] = marker;
           } catch (err) {
             console.error(`Error creating marker for user ${uid}:`, err);
@@ -181,6 +270,19 @@
         console.log(`Added ${Object.keys(otherUsersMarkers).length} user markers to map`);
       }
       window.updateOtherUsersMarkers = updateOtherUsersMarkers;
+
+      function closeAllPopups() {
+        // Close any open popups that might have accessibility issues
+        const closeButtons = document.querySelectorAll('.mapboxgl-popup-close-button');
+        
+        // Click each close button to properly close the popups
+        closeButtons.forEach(button => {
+          button.click();
+        });
+        
+        console.log("Closed all mapbox popups");
+      }
+      window.closeAllPopups = closeAllPopups;
 
       function initializeMap() {
         const tryInitialize = (retries) => {
@@ -236,6 +338,32 @@
         tryInitialize(10);
       }
 
+      // Fix for map rendering issue after inspector is closed
+      window.addEventListener('resize', () => {
+        if (map) {
+          // Force map to resize
+          setTimeout(() => {
+            map.resize();
+            console.log("Map resized due to window resize event");
+          }, 100);
+        }
+      });
+
+      // Additional event listener for devtools opening/closing
+      let lastHeight = window.innerHeight;
+      setInterval(() => {
+        if (lastHeight != window.innerHeight) {
+          lastHeight = window.innerHeight;
+          if (map) {
+            // Force map to resize
+            setTimeout(() => {
+              map.resize();
+              console.log("Map resized due to height change");
+            }, 100);
+          }
+        }
+      }, 500);
+
       window.addEventListener('load', () => {
         console.log("Window loaded, initializing map...");
         setTimeout(initializeMap, 500);
@@ -246,4 +374,5 @@
     <script src="main.dart.js"></script>
   </body>
 </html>
+
 
