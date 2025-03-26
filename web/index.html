@@ -71,6 +71,32 @@
         padding-left: 5px;
         border-left: 2px solid #ff9900;
       }
+      
+      /* Fix for scroll propagation issues */
+      .stop-propagation {
+        touch-action: none;
+        pointer-events: auto !important;
+      }
+      
+      /* Improved UI controls */
+      .mapboxgl-ctrl-group {
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2) !important;
+        border-radius: 12px !important;
+      }
+      
+      .mapboxgl-ctrl button {
+        width: 40px !important; 
+        height: 40px !important;
+      }
+      
+      .mapboxgl-popup {
+        max-width: 280px !important;
+      }
+      
+      .mapboxgl-popup-content {
+        background-color: rgba(255,255,255,0.95) !important;
+        backdrop-filter: blur(5px);
+      }
     </style>
     <script>
       mapboxgl.accessToken = 'pk.eyJ1IjoiZGFtb3NzIiwiYSI6ImNtNnRyZzk5MTA2NzkyaXExN2EyNTR1dWsifQ.UdaXenvYULYz6lkQbLU1hg';
@@ -220,9 +246,25 @@
               }
             });
             
+            // Create the stats for hover popup
+            let popupHTML = `<strong>${userData.displayName || 'User'}</strong>`;
+            
+            // Add distance if available
+            if (userData.distance) {
+              popupHTML += `<div>${userData.distance} miles away</div>`;
+            }
+            
+            // Add additional user details if available
+            if (userData.age) popupHTML += `<div>Age: ${userData.age}</div>`;
+            if (userData.bodyType) popupHTML += `<div>Body Type: ${userData.bodyType}</div>`;
+            if (userData.sexuality) popupHTML += `<div>Sexuality: ${userData.sexuality}</div>`;
+            
             // Create popup with user info
-            const popup = new mapboxgl.Popup({ offset: 25 })
-              .setHTML(`<strong>${userData.displayName || 'User'}</strong>`);
+            const popup = new mapboxgl.Popup({ 
+              offset: 25,
+              closeButton: false,
+              closeOnClick: false
+            }).setHTML(popupHTML);
             
             // Create the marker
             const marker = new mapboxgl.Marker({ element: el })
@@ -230,35 +272,13 @@
               .setPopup(popup)
               .addTo(map);
             
-            // Add stats popup for hover
-            const statsPopup = document.createElement('div');
-            statsPopup.className = 'user-stats-popup';
-            statsPopup.id = `stats-popup-${uid}`;
-            
-            // Build stats HTML
-            let statsHTML = `<strong>${userData.displayName || 'User'}</strong>`;
-            
-            if (userData.age) statsHTML += `<div>Age: ${userData.age}</div>`;
-            if (userData.height) statsHTML += `<div>Height: ${userData.height} cm</div>`;
-            if (userData.weight) statsHTML += `<div>Weight: ${userData.weight} kg</div>`;
-            if (userData.bodyType) statsHTML += `<div>Body Type: ${userData.bodyType}</div>`;
-            if (userData.sexuality) statsHTML += `<div>Sexuality: ${userData.sexuality}</div>`;
-            
-            statsPopup.innerHTML = statsHTML;
-            
-            // Append to body
-            document.body.appendChild(statsPopup);
-            
-            // Show stats on hover
+            // Show popup on hover
             el.addEventListener('mouseenter', () => {
-              const markerRect = el.getBoundingClientRect();
-              statsPopup.style.left = (markerRect.right + 10) + 'px';
-              statsPopup.style.top = markerRect.top + 'px';
-              statsPopup.style.display = 'block';
+              marker.getPopup().addTo(map);
             });
             
             el.addEventListener('mouseleave', () => {
-              statsPopup.style.display = 'none';
+              marker.getPopup().remove();
             });
             
             otherUsersMarkers[uid] = marker;
@@ -270,7 +290,8 @@
         console.log(`Added ${Object.keys(otherUsersMarkers).length} user markers to map`);
       }
       window.updateOtherUsersMarkers = updateOtherUsersMarkers;
-
+      
+      // Add this function to close all popups
       function closeAllPopups() {
         // Close any open popups that might have accessibility issues
         const closeButtons = document.querySelectorAll('.mapboxgl-popup-close-button');
@@ -364,6 +385,17 @@
         }
       }, 500);
 
+      // Prevent scrolling over dialog
+      document.addEventListener('wheel', function(e) {
+        const targetElement = e.target;
+        
+        // Check if the event target is inside a Flutter dialog
+        if (targetElement.closest('.flutter-dialog') || 
+            targetElement.closest('.stop-propagation')) {
+          e.stopPropagation();
+        }
+      }, { passive: false });
+
       window.addEventListener('load', () => {
         console.log("Window loaded, initializing map...");
         setTimeout(initializeMap, 500);
@@ -374,5 +406,4 @@
     <script src="main.dart.js"></script>
   </body>
 </html>
-
 

@@ -4,8 +4,10 @@ import 'dart:typed_data';
 import 'dart:async';
 import 'dart:js' as js;
 import 'dart:convert';
+import 'dart:math' show asin, cos, sin, sqrt, pi;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart';
 
 // Firebase packages
 import 'package:firebase_core/firebase_core.dart';
@@ -203,6 +205,12 @@ class _MapScreenState extends State<MapScreen> {
   // Store user data for quick access
   Map<String, Map<String, dynamic>> _usersData = {};
   
+  // Add these new variables 
+  bool _hasUnreadMessages = false;
+  int _unreadCount = 0;
+  double _visibilityRadius = 5.0; // Default 5 miles radius
+  StreamSubscription<QuerySnapshot>? _messagesSubscription;
+  
   @override
   void initState() {
     super.initState();
@@ -224,6 +232,12 @@ class _MapScreenState extends State<MapScreen> {
         });
         js.context.callMethod('setCurrentUserId', [_currentUserId]);
         
+        // Update online status when logging in
+        _updateOnlineStatus(true);
+        
+        // Start listening for unread messages
+        _startListeningForUnreadMessages();
+        
         // Force location update when logging in
         _forceLocationUpdate();
         
@@ -232,23 +246,103 @@ class _MapScreenState extends State<MapScreen> {
         _startFetchingUserLocations();
       } else {
         print("User logged out");
+        
+        // Update online status when logging out (if we had a user ID before)
+        if (_currentUserId != null) {
+          _updateOnlineStatus(false);
+        }
+        
         setState(() {
           _currentUserId = null;
           _isUserLoggedIn = false;
+          _hasUnreadMessages = false;
+          _unreadCount = 0;
         });
         _stopLocationUpdates();
         _stopFetchingUserLocations();
+        _stopListeningForUnreadMessages();
       }
     });
   }
 
   @override
   void dispose() {
+    // Set online status to false before disposing
+    _updateOnlineStatus(false);
+    
     _authSubscription?.cancel();
     _locationUpdateTimer?.cancel();
     _fetchUsersTimer?.cancel();
     _userLocationsSubscription?.cancel();
+    _messagesSubscription?.cancel();
     super.dispose();
+  }
+  
+  // New method to update online status in Firestore
+  Future<void> _updateOnlineStatus(bool isOnline) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && _currentUserId != null) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('user_locations')
+            .doc(user.uid)
+            .update({
+              'isOnline': isOnline,
+              'lastOnline': DateTime.now().millisecondsSinceEpoch,
+            });
+        print("Updated online status to: $isOnline");
+      } catch (e) {
+        print("Error updating online status: $e");
+      }
+    }
+  }
+  
+  // Add this method to start listening for unread messages
+  void _startListeningForUnreadMessages() {
+    _messagesSubscription?.cancel();
+    
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+    
+    // Listen to all chats where this user is a member
+    _messagesSubscription = FirebaseFirestore.instance
+        .collection('chat_messages')
+        .where('members', arrayContains: currentUser.uid)
+        .snapshots()
+        .listen((snapshot) async {
+          int totalUnread = 0;
+          
+          for (var doc in snapshot.docs) {
+            try {
+              final chatId = doc.id;
+              
+              // Get unread messages count for this chat
+              final messagesQuery = await FirebaseFirestore.instance
+                  .collection('chat_messages')
+                  .doc(chatId)
+                  .collection('messages')
+                  .where('senderId', isNotEqualTo: currentUser.uid)
+                  .where('isRead', isEqualTo: false)
+                  .get();
+                  
+              totalUnread += messagesQuery.docs.length;
+            } catch (e) {
+              print("Error checking unread messages: $e");
+            }
+          }
+          
+          if (mounted) {
+            setState(() {
+              _unreadCount = totalUnread;
+              _hasUnreadMessages = totalUnread > 0;
+            });
+          }
+        });
+  }
+  
+  void _stopListeningForUnreadMessages() {
+    _messagesSubscription?.cancel();
+    _messagesSubscription = null;
   }
   
   void _forceLocationUpdate() {
@@ -269,38 +363,80 @@ class _MapScreenState extends State<MapScreen> {
     // Cancel any existing subscription
     _userLocationsSubscription?.cancel();
     
-    // Set up a real-time listener for user location changes
+    // Set up a real-time listener for user location changes - only for online users
     _userLocationsSubscription = FirebaseFirestore.instance
       .collection('user_locations')
+      .where('isOnline', isEqualTo: true) // Only get online users
       .snapshots()
       .listen((snapshot) {
         final Map<String, Map<String, dynamic>> users = {};
         
         print("Got ${snapshot.docs.length} user location documents (real-time)");
-        
-        for (var doc in snapshot.docs) {
-          try {
-            final String uid = doc.id;
-            
-            // Skip current user
-            if (uid == _currentUserId) continue;
-            
-            final Map<String, dynamic> data = doc.data();
-            
-            // Only include users with valid location data
-            if (data.containsKey('longitude') && data.containsKey('latitude')) {
-              users[uid] = {
-                'longitude': data['longitude'],
-                'latitude': data['latitude'],
-                'photoURL': data['photoURL'] ?? 'https://via.placeholder.com/40',
-                'displayName': data['displayName'] ?? 'User',
-                'lastUpdated': data['lastUpdated'] ?? DateTime.now().millisecondsSinceEpoch,
-              };
-            }
-          } catch (e) {
-            print("Error processing document ${doc.id}: $e");
+for (var doc in snapshot.docs) {
+  try {
+    final String uid = doc.id;
+    
+    // Skip current user
+    if (uid == _currentUserId) continue;
+    
+    final Map<String, dynamic> data = doc.data();
+    
+    // Only include users with valid location data
+    if (data.containsKey('longitude') && data.containsKey('latitude')) {
+      // Calculate distance to filter users within radius
+      if (_currentUserId != null && data.containsKey('longitude') && data.containsKey('latitude')) {
+        // Find current user document without using firstWhere
+        DocumentSnapshot? currentUserDoc = null;
+        for (var d in snapshot.docs) {
+          if (d.id == _currentUserId) {
+            currentUserDoc = d;
+            break;
           }
         }
+        
+        if (currentUserDoc == null) {
+          continue; // Skip to next user if we can't find current user doc
+        }
+        
+// Cast the result to Map<String, dynamic>
+final currentUserData = currentUserDoc.data() as Map<String, dynamic>?;
+        
+if (currentUserData != null && 
+    currentUserData.containsKey('longitude') && 
+    currentUserData.containsKey('latitude')) {
+  
+  // Calculate distance between current user and this user
+  final distance = _calculateDistance(
+    currentUserData['latitude'], 
+    currentUserData['longitude'],
+    data['latitude'], 
+    data['longitude']
+  );
+          
+          // Only include user if within the visibility radius (in miles)
+          if (distance <= _visibilityRadius) {
+            users[uid] = {
+              'longitude': data['longitude'],
+              'latitude': data['latitude'],
+              'photoURL': data['photoURL'] ?? 'https://via.placeholder.com/40',
+              'displayName': data['displayName'] ?? 'User',
+              'lastUpdated': data['lastUpdated'] ?? DateTime.now().millisecondsSinceEpoch,
+              'distance': distance.toStringAsFixed(1), // Add distance for display
+              // Include other profile data if available
+              if (data.containsKey('age')) 'age': data['age'],
+              if (data.containsKey('height')) 'height': data['height'],
+              if (data.containsKey('weight')) 'weight': data['weight'],
+              if (data.containsKey('bodyType')) 'bodyType': data['bodyType'],
+              if (data.containsKey('sexuality')) 'sexuality': data['sexuality'],
+            };
+          }
+        }
+      }
+    }
+  } catch (e) {
+    print("Error processing document ${doc.id}: $e");
+  }
+}
         
         // Store users data for access in profile dialog
         _usersData = users;
@@ -313,6 +449,27 @@ class _MapScreenState extends State<MapScreen> {
         // Fall back to periodic updates if the listener fails
         _startPeriodicFetching();
       });
+  }
+
+  // Add this method to calculate distance between two points in miles
+  double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+    const double earthRadius = 3958.8; // Earth radius in miles
+    
+    // Convert to radians
+    final dLat = _toRadians(lat2 - lat1);
+    final dLon = _toRadians(lon2 - lon1);
+    
+    // Haversine formula
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+              cos(_toRadians(lat1)) * cos(_toRadians(lat2)) *
+              sin(dLon / 2) * sin(dLon / 2);
+    
+    final c = 2 * asin(sqrt(a));
+    return earthRadius * c; // Distance in miles
+  }
+  
+  double _toRadians(double degrees) {
+    return degrees * pi / 180;
   }
 
   void _startPeriodicFetching() {
@@ -372,13 +529,15 @@ class _MapScreenState extends State<MapScreen> {
             
             print("Saving location: [$longitude, $latitude] for user ${user.uid}");
             
-            // Document data structure - simpler format without GeoPoint
+            // Document data structure with online status
             final Map<String, dynamic> docData = {
               'longitude': longitude,
               'latitude': latitude,
               'photoURL': user.photoURL ?? 'https://via.placeholder.com/40',
               'displayName': user.displayName ?? 'User',
               'lastUpdated': DateTime.now().millisecondsSinceEpoch,
+              'isOnline': true,
+              'lastOnline': DateTime.now().millisecondsSinceEpoch,
             };
             
             // Method 1: Use the Firestore SDK
@@ -404,6 +563,8 @@ class _MapScreenState extends State<MapScreen> {
                     'photoURL': {'stringValue': user.photoURL ?? 'https://via.placeholder.com/40'},
                     'displayName': {'stringValue': user.displayName ?? 'User'},
                     'lastUpdated': {'integerValue': DateTime.now().millisecondsSinceEpoch.toString()},
+                    'isOnline': {'booleanValue': true},
+                    'lastOnline': {'integerValue': DateTime.now().millisecondsSinceEpoch.toString()},
                   }
                 };
                 
@@ -448,6 +609,7 @@ class _MapScreenState extends State<MapScreen> {
       try {
         final snapshot = await FirebaseFirestore.instance
             .collection('user_locations')
+            .where('isOnline', isEqualTo: true) // Only fetch online users
             .get();
 
         final Map<String, Map<String, dynamic>> users = {};
@@ -465,13 +627,44 @@ class _MapScreenState extends State<MapScreen> {
             
             // Only include users with valid location data
             if (data.containsKey('longitude') && data.containsKey('latitude')) {
-              users[uid] = {
-                'longitude': data['longitude'],
-                'latitude': data['latitude'],
-                'photoURL': data['photoURL'] ?? 'https://via.placeholder.com/40',
-                'displayName': data['displayName'] ?? 'User',
-                'lastUpdated': data['lastUpdated'] ?? DateTime.now().millisecondsSinceEpoch,
-              };
+              // Get current user's location for distance calculation
+              final currentUserDoc = await FirebaseFirestore.instance
+                  .collection('user_locations')
+                  .doc(_currentUserId)
+                  .get();
+                  
+              if (currentUserDoc.exists) {
+                final currentUserData = currentUserDoc.data();
+                if (currentUserData != null && 
+                    currentUserData.containsKey('longitude') && 
+                    currentUserData.containsKey('latitude')) {
+                  
+                  // Calculate distance
+                  final distance = _calculateDistance(
+                    currentUserData['latitude'], 
+                    currentUserData['longitude'],
+                    data['latitude'], 
+                    data['longitude']
+                  );
+                  
+                  // Only include if within radius
+                  if (distance <= _visibilityRadius) {
+                    users[uid] = {
+                      'longitude': data['longitude'],
+                      'latitude': data['latitude'],
+                      'photoURL': data['photoURL'] ?? 'https://via.placeholder.com/40',
+                      'displayName': data['displayName'] ?? 'User',
+                      'lastUpdated': data['lastUpdated'] ?? DateTime.now().millisecondsSinceEpoch,
+                      'distance': distance.toStringAsFixed(1),
+                      if (data.containsKey('age')) 'age': data['age'],
+                      if (data.containsKey('height')) 'height': data['height'],
+                      if (data.containsKey('weight')) 'weight': data['weight'],
+                      if (data.containsKey('bodyType')) 'bodyType': data['bodyType'],
+                      if (data.containsKey('sexuality')) 'sexuality': data['sexuality'],
+                    };
+                  }
+                }
+              }
             }
           } catch (e) {
             print("Error processing document ${doc.id}: $e");
@@ -496,8 +689,8 @@ class _MapScreenState extends State<MapScreen> {
         // Get an auth token
         final token = await user.getIdToken();
         
-        // Build the URL for Firestore REST API
-        final url = 'https://firestore.googleapis.com/v1/projects/mapbox-in-javascript/databases/(default)/documents/user_locations';
+        // Build the URL for Firestore REST API with filter for online users
+        final url = 'https://firestore.googleapis.com/v1/projects/mapbox-in-javascript/databases/(default)/documents/user_locations?pageSize=100';
         
         // Make the HTTP request
         final response = await HttpRequest.request(
@@ -516,6 +709,21 @@ class _MapScreenState extends State<MapScreen> {
           
           final Map<String, Map<String, dynamic>> users = {};
           
+          // Get current user's location for distance calculation
+          final currentUserDoc = await FirebaseFirestore.instance
+              .collection('user_locations')
+              .doc(_currentUserId)
+              .get();
+              
+          double? currentUserLat, currentUserLng;
+          if (currentUserDoc.exists) {
+            final currentUserData = currentUserDoc.data();
+            if (currentUserData != null) {
+              currentUserLat = currentUserData['latitude'];
+              currentUserLng = currentUserData['longitude'];
+            }
+          }
+          
           for (var doc in documents) {
             try {
               final String path = doc['name'];
@@ -526,15 +734,36 @@ class _MapScreenState extends State<MapScreen> {
               
               final fields = doc['fields'];
               
+              // Check if user is online
+              final isOnline = fields['isOnline']?['booleanValue'] == true;
+              if (!isOnline) continue;
+              
               // Only include users with valid location data
               if (fields['longitude'] != null && fields['latitude'] != null) {
-                users[uid] = {
-                  'longitude': double.parse(fields['longitude']['doubleValue'].toString()),
-                  'latitude': double.parse(fields['latitude']['doubleValue'].toString()),
-                  'photoURL': fields['photoURL']?['stringValue'] ?? 'https://via.placeholder.com/40',
-                  'displayName': fields['displayName']?['stringValue'] ?? 'User',
-                  'lastUpdated': int.parse(fields['lastUpdated']?['integerValue'] ?? '0'),
-                };
+                final double lat = double.parse(fields['latitude']['doubleValue'].toString());
+                final double lng = double.parse(fields['longitude']['doubleValue'].toString());
+                
+                // Calculate distance if we have current user's location
+                if (currentUserLat != null && currentUserLng != null) {
+                  final distance = _calculateDistance(
+                    currentUserLat, 
+                    currentUserLng,
+                    lat, 
+                    lng
+                  );
+                  
+                  // Only include if within radius
+                  if (distance <= _visibilityRadius) {
+                    users[uid] = {
+                      'longitude': lng,
+                      'latitude': lat,
+                      'photoURL': fields['photoURL']?['stringValue'] ?? 'https://via.placeholder.com/40',
+                      'displayName': fields['displayName']?['stringValue'] ?? 'User',
+                      'lastUpdated': int.parse(fields['lastUpdated']?['integerValue'] ?? '0'),
+                      'distance': distance.toStringAsFixed(1),
+                    };
+                  }
+                }
               }
             } catch (e) {
               print("Error processing REST document: $e");
@@ -566,6 +795,9 @@ class _MapScreenState extends State<MapScreen> {
         break;
       case 'account_settings':
         _showAccountSettings(context);
+        break;
+      case 'reset_password':
+        _showResetPasswordDialog(context);
         break;
       case 'upgrade':
         _showUpgradeOptions(context);
@@ -614,6 +846,12 @@ class _MapScreenState extends State<MapScreen> {
         break;
       case 'change_profile_picture':
         _uploadProfilePicture(context, "main");
+        break;
+      case 'manage_groups':
+        _showGroupsDialog(context);
+        break;
+      case 'visibility_settings':
+        _showVisibilitySettingsDialog(context);
         break;
       case 'sign_out':
         FirebaseAuth.instance.signOut();
@@ -937,20 +1175,355 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  void _showResetPasswordDialog(BuildContext context) {
+    js.context.callMethod('closeAllPopups');
+    
+    final emailController = TextEditingController();
+    final currentUser = FirebaseAuth.instance.currentUser;
+    
+    if (currentUser != null) {
+      emailController.text = currentUser.email ?? '';
+    }
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset Password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Enter your email address. We\'ll send you a link to reset your password.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: emailController,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.email),
+              ),
+              keyboardType: TextInputType.emailAddress,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final email = emailController.text.trim();
+              if (email.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter your email')),
+                );
+                return;
+              }
+              
+              try {
+                await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+                
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Password reset link sent! Check your email')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: ${e.toString()}')),
+                  );
+                }
+              }
+            },
+            child: const Text('Send Reset Link'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showUpgradeOptions(BuildContext context) {
     js.context.callMethod('closeAllPopups');
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Upgrade Account'),
-        content: const SizedBox(
-          width: 400,
-          child: Text('Upgrade options will be available here.'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Premium features:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text('• Create unlimited groups'),
+            const Text('• Join unlimited groups'),
+            const Text('• Advanced profile features'),
+            const Text('• Priority visibility on the map'),
+            const SizedBox(height: 16),
+            const Text('Coming soon!'),
+          ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
+            child: const Text('Maybe Later'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Subscription feature coming soon!')),
+              );
+            },
+            child: const Text('Subscribe'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Add groups functionality
+  void _showGroupsDialog(BuildContext context) {
+    js.context.callMethod('closeAllPopups');
+    
+    showDialog(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (context) => Stack(
+        children: [
+          Positioned(
+            top: kToolbarHeight,
+            right: 10,
+            width: 400,
+            height: MediaQuery.of(context).size.height * 0.7,
+            child: Material(
+              elevation: 8.0,
+              borderRadius: BorderRadius.circular(20),
+              child: GroupsDialog(
+                onCreateGroup: () => _showCreateGroupDialog(context),
+                onSubscribe: () => _showSubscriptionDialog(context),
+                visibilityRadius: _visibilityRadius,
+                onRadiusChanged: (value) {
+                  setState(() {
+                    _visibilityRadius = value;
+                  });
+                  // Re-fetch users when radius changes
+                  _startFetchingUserLocations();
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCreateGroupDialog(BuildContext context) {
+    final nameController = TextEditingController();
+    final descriptionController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Create New Group'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Group Name',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: descriptionController,
+                decoration: const InputDecoration(
+                  labelText: 'Description',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameController.text.trim();
+              final description = descriptionController.text.trim();
+              
+              if (name.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter a group name')),
+                );
+                return;
+              }
+              
+              final currentUser = FirebaseAuth.instance.currentUser;
+              if (currentUser == null) return;
+              
+              // Check if user already created a group
+              final userGroups = await FirebaseFirestore.instance
+                  .collection('groups')
+                  .where('creatorId', isEqualTo: currentUser.uid)
+                  .get();
+                  
+              if (userGroups.docs.length >= 1) {
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                  _showSubscriptionDialog(context, 
+                      message: 'You\'ve reached your limit of free groups.\nUpgrade to create more!');
+                }
+                return;
+              }
+              
+              try {
+                // Get current location for the group
+                final locationDoc = await FirebaseFirestore.instance
+                    .collection('user_locations')
+                    .doc(currentUser.uid)
+                    .get();
+                
+                double? latitude, longitude;
+                if (locationDoc.exists) {
+                  final data = locationDoc.data();
+                  if (data != null) {
+                    latitude = data['latitude'];
+                    longitude = data['longitude'];
+                  }
+                }
+                
+                // Create the group
+                await FirebaseFirestore.instance.collection('groups').add({
+                  'name': name,
+                  'description': description,
+                  'creatorId': currentUser.uid,
+                  'creatorName': currentUser.displayName,
+                  'createdAt': FieldValue.serverTimestamp(),
+                  'members': [currentUser.uid],
+                  'memberCount': 1,
+                  'latitude': latitude,
+                  'longitude': longitude,
+                });
+                
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Group created successfully!')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error creating group: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSubscriptionDialog(BuildContext context, {String? message}) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Upgrade to Premium'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (message != null)
+              Text(
+                message,
+                style: const TextStyle(color: Colors.red),
+                textAlign: TextAlign.center,
+              ),
+            if (message != null)
+              const SizedBox(height: 16),
+            const Text(
+              'Premium features:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text('• Create unlimited groups'),
+            const Text('• Join unlimited groups'),
+            const Text('• Advanced profile features'),
+            const Text('• Priority visibility on the map'),
+            const SizedBox(height: 16),
+            const Text('Coming soon!'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Maybe Later'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Subscription feature coming soon!')),
+              );
+            },
+            child: const Text('Subscribe'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showVisibilitySettingsDialog(BuildContext context) {
+    js.context.callMethod('closeAllPopups');
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Visibility Settings'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Control who can see you on the map'),
+            const SizedBox(height: 16),
+            Text('Visibility radius: ${_visibilityRadius.toStringAsFixed(1)} miles'),
+            Slider(
+              value: _visibilityRadius,
+              min: 1.0,
+              max: 50.0,
+              divisions: 49,
+              label: _visibilityRadius.toStringAsFixed(1) + ' miles',
+              onChanged: (value) {
+                setState(() {
+                  _visibilityRadius = value;
+                });
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              // Re-fetch users when radius changes
+              _startFetchingUserLocations();
+            },
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -1008,12 +1581,20 @@ class _MapScreenState extends State<MapScreen> {
             child: Material(
               elevation: 8.0,
               borderRadius: BorderRadius.circular(20),
-              child: MessagesDialog(
-                onChatSelected: (userId, name, photo) {
-                  // Close messages dialog and open chat
-                  Navigator.of(context).pop();
-                  _startChatWithUser(userId, name: name, photo: photo);
-                },
+              child: NotificationListener<ScrollNotification>(
+                // This prevents scroll events from propagating to the map
+                onNotification: (notification) {
+                  // Prevent scroll notifications from propagating to parent
+                  return true;
+                  },
+                // This prevents gesture events from propagating to the map
+                child: MessagesDialog(
+                  onChatSelected: (userId, name, photo) {
+                    // Close messages dialog and open chat
+                    Navigator.of(context).pop();
+                    _startChatWithUser(userId, name: name, photo: photo);
+                  },
+                ),
               ),
             ),
           ),
@@ -1061,10 +1642,19 @@ class _MapScreenState extends State<MapScreen> {
             child: Material(
               elevation: 8.0,
               borderRadius: BorderRadius.circular(20),
-              child: ChatDialog(
-                targetUserId: userId,
-                targetUserName: targetUserName,
-                targetUserPhoto: targetUserPhoto,
+              child: NotificationListener<ScrollNotification>(
+
+                // This prevents scroll events from propagating to the map
+                onNotification: (notification) {
+                  // Prevent scroll notifications from propagating to parent
+    return true;
+  },
+                // This prevents gesture events from propagating to the map
+                child: ChatDialog(
+                  targetUserId: userId,
+                  targetUserName: targetUserName,
+                  targetUserPhoto: targetUserPhoto,
+                ),
               ),
             ),
           ),
@@ -1271,12 +1861,42 @@ class _MapScreenState extends State<MapScreen> {
                           ),
                         ),
                         const PopupMenuItem<String>(
+                          value: 'reset_password',
+                          child: Row(
+                            children: [
+                              Icon(Icons.lock_reset, size: 24),
+                              SizedBox(width: 10),
+                              Text("Reset Password", style: TextStyle(fontSize: 16)),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem<String>(
                           value: 'account_settings',
                           child: Row(
                             children: [
                               Icon(Icons.settings, size: 24), // Increased size
                               SizedBox(width: 10),
                               Text("Account Settings", style: TextStyle(fontSize: 16)), // Increased font size
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem<String>(
+                          value: 'visibility_settings',
+                          child: Row(
+                            children: [
+                              Icon(Icons.visibility, size: 24),
+                              SizedBox(width: 10),
+                              Text("Visibility Settings", style: TextStyle(fontSize: 16)),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem<String>(
+                          value: 'manage_groups',
+                          child: Row(
+                            children: [
+                              Icon(Icons.group, size: 24),
+                              SizedBox(width: 10),
+                              Text("Manage Groups", style: TextStyle(fontSize: 16)),
                             ],
                           ),
                         ),
@@ -1348,130 +1968,465 @@ class _MapScreenState extends State<MapScreen> {
       body: Stack(
         children: [
           const HtmlElementView(viewType: 'mapbox-gl-element'),
-          // Debug Panel
-          Positioned(
-            bottom: 20,
-            left: 20,
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "User ID: ${_currentUserId ?? 'Not signed in'}",
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.my_location),
-                    label: const Text("Update My Location"),
-                    onPressed: () {
-                      _forceLocationUpdate();
-                      _updateUserLocation();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      minimumSize: const Size(220, 48), // Increased size
-                      textStyle: const TextStyle(fontSize: 16), // Increased font size
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.refresh),
-                    label: const Text("Refresh Other Users"),
-                    onPressed: _fetchUserLocations,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      minimumSize: const Size(220, 48), // Increased size
-                      textStyle: const TextStyle(fontSize: 16), // Increased font size
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.code),
-                    label: const Text("Print Debug Info"),
-                    onPressed: () {
-                      print("Current User ID: $_currentUserId");
-                      print("Is User Logged In: $_isUserLoggedIn");
-                      print("JS userLocation: ${js.context['userLocation']}");
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
-                      minimumSize: const Size(220, 48), // Increased size
-                      textStyle: const TextStyle(fontSize: 16), // Increased font size
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          
           // Connection status indicator
-          Positioned(
-            top: 10,
-            left: 10,
-            child: StreamBuilder<User?>(
-              stream: FirebaseAuth.instance.authStateChanges(),
-              builder: (context, snapshot) {
-                final isLoggedIn = snapshot.data != null;
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isLoggedIn ? Colors.green.withOpacity(0.8) : Colors.red.withOpacity(0.8),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        isLoggedIn ? Icons.check_circle : Icons.error,
-                        color: Colors.white,
-                        size: 20, // Increased from 18
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        isLoggedIn ? "Connected" : "Not Connected",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16, // Increased from default
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-          // Messages button
+          
+          // Add extra buttons in a row at the bottom
           Positioned(
             bottom: 20,
             right: 20,
-            child: FloatingActionButton(
-              onPressed: () => _showMessagesDialog(context),
-              backgroundColor: Colors.blue,
-              elevation: 4,
-              child: const Icon(Icons.message, size: 28), // Increased size
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // Groups button
+                FloatingActionButton(
+                  onPressed: () => _showGroupsDialog(context),
+                  backgroundColor: Colors.purple,
+                  elevation: 4,
+                  mini: true,
+                  heroTag: 'groups',
+                  child: const Icon(Icons.group, size: 24),
+                ),
+                const SizedBox(height: 10),
+                
+                // Visibility settings button
+                FloatingActionButton(
+                  onPressed: () => _showVisibilitySettingsDialog(context),
+                  backgroundColor: Colors.green,
+                  elevation: 4,
+                  mini: true,
+                  heroTag: 'visibility',
+                  child: const Icon(Icons.visibility, size: 24),
+                ),
+                const SizedBox(height: 10),
+                
+                // Messages button with notification badge
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    FloatingActionButton(
+                      onPressed: () => _showMessagesDialog(context),
+                      backgroundColor: Colors.blue,
+                      elevation: 4,
+                      heroTag: 'messages',
+                      child: const Icon(Icons.message, size: 28),
+                    ),
+                    if (_hasUnreadMessages)
+                      Positioned(
+                        top: -5,
+                        right: -5,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 22,
+                            minHeight: 22,
+                          ),
+                          child: Text(
+                            _unreadCount > 99 ? '99+' : _unreadCount.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Class for groups dialog
+class GroupsDialog extends StatefulWidget {
+  final VoidCallback onCreateGroup;
+  final VoidCallback onSubscribe;
+  final double visibilityRadius;
+  final ValueChanged<double> onRadiusChanged;
+  
+  const GroupsDialog({
+    super.key,
+    required this.onCreateGroup,
+    required this.onSubscribe,
+    required this.visibilityRadius,
+    required this.onRadiusChanged,
+  });
+
+  @override
+  _GroupsDialogState createState() => _GroupsDialogState();
+}
+
+class _GroupsDialogState extends State<GroupsDialog> {
+  bool isLoading = true;
+  List<Map<String, dynamic>> nearbyGroups = [];
+  List<Map<String, dynamic>> myGroups = [];
+  
+  @override
+  void initState() {
+    super.initState();
+    _loadGroups();
+  }
+  
+  Future<void> _loadGroups() async {
+    setState(() {
+      isLoading = true;
+    });
+    
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        setState(() {
+          isLoading = false;
+          nearbyGroups = [];
+          myGroups = [];
+        });
+        return;
+      }
+      
+      // Get current user's location
+      final userDoc = await FirebaseFirestore.instance
+          .collection('user_locations')
+          .doc(currentUser.uid)
+          .get();
+          
+      double? userLat, userLng;
+      if (userDoc.exists) {
+        final userData = userDoc.data();
+        if (userData != null) {
+          userLat = userData['latitude'];
+          userLng = userData['longitude'];
+        }
+      }
+      
+      // Load all groups from Firestore
+      final snapshot = await FirebaseFirestore.instance
+          .collection('groups')
+          .get();
+          
+      List<Map<String, dynamic>> nearby = [];
+      List<Map<String, dynamic>> mine = [];
+      
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final Map<String, dynamic> group = {
+          'id': doc.id,
+          'name': data['name'] ?? 'Unnamed group',
+          'description': data['description'] ?? '',
+          'memberCount': data['memberCount'] ?? 0,
+          'creatorId': data['creatorId'],
+          'creatorName': data['creatorName'],
+          'isCreator': data['creatorId'] == currentUser.uid,
+          'isMember': (data['members'] as List<dynamic>?)?.contains(currentUser.uid) ?? false,
+        };
+        
+        // Check if user is member/creator
+        if (group['isCreator'] || group['isMember']) {
+          mine.add(group);
+        }
+        
+        // Check if group is within radius
+        if (userLat != null && userLng != null && 
+            data['latitude'] != null && data['longitude'] != null) {
+          final distance = _calculateDistance(
+            userLat, userLng, 
+            data['latitude'], data['longitude']
+          );
+          
+          if (distance <= widget.visibilityRadius) {
+            group['distance'] = distance;
+            nearby.add(group);
+          }
+        }
+      }
+      
+      // Sort nearby groups by distance
+      nearby.sort((a, b) => (a['distance'] as double).compareTo(b['distance'] as double));
+      
+      setState(() {
+        nearbyGroups = nearby;
+        myGroups = mine;
+        isLoading = false;
+      });
+    } catch (e) {
+      print("Error loading groups: $e");
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+  
+  double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+    const double earthRadius = 3958.8; // Earth radius in miles
+    
+    // Convert to radians
+    final dLat = _toRadians(lat2 - lat1);
+    final dLon = _toRadians(lon2 - lon1);
+    
+    // Haversine formula
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+              cos(_toRadians(lat1)) * cos(_toRadians(lat2)) *
+              sin(dLon / 2) * sin(dLon / 2);
+    
+    final c = 2 * asin(sqrt(a));
+    return earthRadius * c; // Distance in miles
+  }
+  
+  double _toRadians(double degrees) {
+    return degrees * pi / 180;
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return NotificationListener<ScrollNotification>(
+      // This prevents scroll events from propagating to the map
+      onNotification: (notification) {
+       // Prevent scroll notifications from propagating to parent
+    return true;
+  },
+      // This prevents gesture events from propagating to the map
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: Colors.purple,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(20),
+                  topRight: Radius.circular(20),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Text(
+                    "Groups",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Visibility Settings
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Visibility radius: ${widget.visibilityRadius.toStringAsFixed(1)} miles'),
+                  Slider(
+                    value: widget.visibilityRadius,
+                    min: 1.0,
+                    max: 50.0,
+                    divisions: 49,
+                    label: widget.visibilityRadius.toStringAsFixed(1) + ' miles',
+                    activeColor: Colors.purple,
+                    onChanged: widget.onRadiusChanged,
+                  ),
+                ],
+              ),
+            ),
+            
+            // Action buttons
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.add),
+                      label: const Text('Create Group'),
+                      onPressed: widget.onCreateGroup,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.star),
+                      label: const Text('Upgrade'),
+                      onPressed: widget.onSubscribe,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.amber,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Tabs for My Groups and Nearby Groups
+            DefaultTabController(
+              length: 2,
+              child: Expanded(
+                child: Column(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                      ),
+                      child: const TabBar(
+                        tabs: [
+                          Tab(text: 'My Groups'),
+                          Tab(text: 'Nearby Groups'),
+                        ],
+                        labelColor: Colors.purple,
+                        indicatorColor: Colors.purple,
+                      ),
+                    ),
+                    Expanded(
+                      child: TabBarView(
+                        children: [
+                          // My Groups tab
+                          isLoading
+                              ? const Center(child: CircularProgressIndicator())
+                              : myGroups.isEmpty
+                                  ? Center(
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(20.0),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.group, size: 64, color: Colors.grey[400]),
+                                            const SizedBox(height: 16),
+                                            const Text(
+                                              "You haven't joined any groups yet",
+                                              style: TextStyle(fontSize: 16),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    )
+                                  : ListView.builder(
+                                      itemCount: myGroups.length,
+                                      itemBuilder: (context, index) {
+                                        final group = myGroups[index];
+                                        return ListTile(
+                                          title: Text(
+                                            group['name'],
+                                            style: const TextStyle(fontWeight: FontWeight.bold),
+                                          ),
+                                          subtitle: Text(group['description']),
+                                          leading: CircleAvatar(
+                                            child: Icon(
+                                              group['isCreator'] ? Icons.star : Icons.group,
+                                              color: Colors.white,
+                                            ),
+                                            backgroundColor: group['isCreator'] ? Colors.amber : Colors.purple,
+                                          ),
+                                          trailing: Text("${group['memberCount']} members"),
+                                          onTap: () {
+                                            // Show group details
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('Group details coming soon!')),
+                                            );
+                                          },
+                                        );
+                                      },
+                                    ),
+                                    
+                          // Nearby Groups tab
+                          isLoading
+                              ? const Center(child: CircularProgressIndicator())
+                              : nearbyGroups.isEmpty
+                                  ? Center(
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(20.0),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.location_off, size: 64, color: Colors.grey[400]),
+                                            const SizedBox(height: 16),
+                                            Text(
+                                              "No groups found within ${widget.visibilityRadius.toStringAsFixed(1)} miles",
+                                              style: const TextStyle(fontSize: 16),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    )
+                                  : ListView.builder(
+                                      itemCount: nearbyGroups.length,
+                                      itemBuilder: (context, index) {
+                                        final group = nearbyGroups[index];
+                                        final bool isMember = group['isMember'] ?? false;
+                                        
+                                        return ListTile(
+                                          title: Text(
+                                            group['name'],
+                                            style: const TextStyle(fontWeight: FontWeight.bold),
+                                          ),
+                                          subtitle: Text(
+                                            "${group['description']}\n${group['distance'].toStringAsFixed(1)} miles away"
+                                          ),
+                                          isThreeLine: true,
+                                          leading: CircleAvatar(
+                                            child: Icon(
+                                              group['isCreator'] ? Icons.star : Icons.group,
+                                              color: Colors.white,
+                                            ),
+                                            backgroundColor: isMember ? Colors.green : Colors.grey,
+                                          ),
+                                          trailing: isMember 
+                                              ? Icon(Icons.check_circle, color: Colors.green)
+                                              : ElevatedButton(
+                                                  onPressed: () {
+                                                    // Join group
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(content: Text('Joining groups coming soon!')),
+                                                    );
+                                                  },
+                                                  child: const Text('Join'),
+                                                ),
+                                          onTap: () {
+                                            // Show group details
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('Group details coming soon!')),
+                                            );
+                                          },
+                                        );
+                                      },
+                                    ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1728,23 +2683,102 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
   
   @override
   Widget build(BuildContext context) {
+    return NotificationListener<ScrollNotification>(
+      // This prevents scroll events from propagating to the map
+      onNotification: (notification) {
+       // Prevent scroll notifications from propagating to parent
+    return true;
+  },
+      // This prevents gesture events from propagating to the map
+
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top banner with edit button
+            Container(
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: Colors.blue,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(20),
+                  topRight: Radius.circular(20),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    isEditing ? "Edit Profile" : (userData?['displayName'] ?? 'User'),
+                    style: const TextStyle(
+                      fontSize: 24, 
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white
+                    ),
+                  ),
+                  const Spacer(),
+                  if (isCurrentUser && !isEditing)
+                    IconButton(
+                      icon: const Icon(Icons.edit, color: Colors.white, size: 28), // Increased size
+                      tooltip: "Edit Profile",
+                      onPressed: () {
+                        setState(() {
+                          isEditing = true;
+                        });
+                      },
+                    ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white, size: 28), // Increased size
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Main content
+            Expanded(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: isEditing 
+                      ? _buildEditProfileView()
+                      : _buildProfileView(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildProfileView() {
     if (isLoading) {
-      return Padding(
-        padding: const EdgeInsets.all(20.0),
+      return const Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            const Text("Loading user profile...")
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text("Loading user profile...")
           ],
         ),
       );
     }
     
     if (userData == null) {
-      return Padding(
-        padding: const EdgeInsets.all(20.0),
+      return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1758,7 +2792,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
         ),
       );
     }
-    
+
     final displayName = userData!['displayName'] ?? 'User';
     final mainPhotoURL = userData!['photoURL'] ?? 'https://via.placeholder.com/150';
     
@@ -1767,78 +2801,6 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     final pic2 = profileData.additionalPictures?['2'] ?? 'https://via.placeholder.com/150?text=Add+Photo';
     final pic3 = profileData.additionalPictures?['3'] ?? 'https://via.placeholder.com/150?text=Add+Photo';
     
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Top banner with edit button
-          Container(
-            padding: const EdgeInsets.all(16.0),
-            decoration: BoxDecoration(
-              color: Colors.blue,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Text(
-                  isEditing ? "Edit Profile" : displayName,
-                  style: const TextStyle(
-                    fontSize: 24, 
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white
-                  ),
-                ),
-                const Spacer(),
-                if (isCurrentUser && !isEditing)
-                  IconButton(
-                    icon: const Icon(Icons.edit, color: Colors.white, size: 28), // Increased size
-                    tooltip: "Edit Profile",
-                    onPressed: () {
-                      setState(() {
-                        isEditing = true;
-                      });
-                    },
-                  ),
-                IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white, size: 28), // Increased size
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
-          ),
-          
-          // Main content
-          Expanded(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: isEditing 
-                    ? _buildEditProfileView()
-                    : _buildProfileView(mainPhotoURL, pic1, pic2, pic3),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-  
-  Widget _buildProfileView(String mainPhotoURL, String pic1, String pic2, String pic3) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2113,7 +3075,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
             ),
             
             // Message button (only show if viewing someone else's profile)
-            if (!isCurrentUser)
+            if (!isCurrentUser && widget.onMessageTap != null)
               ElevatedButton.icon(
                 icon: const Icon(Icons.message),
                 label: const Text("Message"),
@@ -2237,7 +3199,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
             ),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*$')),
+          FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*$')),
             ],
           ),
           const SizedBox(height: 12),
@@ -2381,7 +3343,7 @@ class _MessagesDialogState extends State<MessagesDialog> {
         return;
       }
       
-      // Listen for chats where the current user is a member
+      // Listen to all chats where this user is a member
       _chatsSubscription = FirebaseFirestore.instance
           .collection('chat_messages')
           .where('members', arrayContains: currentUser.uid)
@@ -2485,13 +3447,6 @@ class _MessagesDialogState extends State<MessagesDialog> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
       ),
       child: Column(
         children: [
@@ -2575,6 +3530,10 @@ class _MessagesDialogState extends State<MessagesDialog> {
                               chat['lastMessage'],
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: !chat['isRead'] ? Colors.black : Colors.grey[600],
+                                fontWeight: !chat['isRead'] ? FontWeight.bold : FontWeight.normal,
+                              ),
                             ),
                             trailing: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -3038,74 +3997,96 @@ class _SignInDialogState extends State<SignInDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      elevation: 4.0,
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              const Text(
-                "Sign In",
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              if (_errorMessage.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.red[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red[200]!),
+    return NotificationListener<ScrollNotification>(
+      // This prevents scroll events from propagating to the map
+      onNotification: (notification) {
+           // Prevent scroll notifications from propagating to parent
+    return true;
+  },
+
+      // This prevents gesture events from propagating to the map
+      child: Material(
+        elevation: 4.0,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                const Text(
+                  "Sign In",
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue,
                   ),
-                  child: Text(
-                    _errorMessage, 
-                    style: TextStyle(color: Colors.red[800]),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                if (_errorMessage.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.red[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red[200]!),
+                    ),
+                    child: Text(
+                      _errorMessage, 
+                      style: TextStyle(color: Colors.red[800]),
+                    ),
+                  ),
+                TextFormField(
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    prefixIcon: Icon(Icons.email),
+                  ),
+                  onSaved: (value) => _email = value!.trim(),
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (value) => value!.isEmpty ? 'Please enter your email.' : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  decoration: const InputDecoration(
+                    labelText: 'Password',
+                    prefixIcon: Icon(Icons.lock),
+                  ),
+                  onSaved: (value) => _password = value!.trim(),
+                  obscureText: true,
+                  validator: (value) =>
+                      value!.length < 6 ? 'Password must be at least 6 characters.' : null,
+                ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      
+                      final _MapScreenState mapState = context.findAncestorStateOfType<_MapScreenState>()!;
+                      mapState._showResetPasswordDialog(context);
+                    },
+                    child: const Text('Forgot Password?'),
                   ),
                 ),
-              TextFormField(
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  prefixIcon: Icon(Icons.email),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _signIn,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: const Text('Sign In'),
                 ),
-                onSaved: (value) => _email = value!.trim(),
-                keyboardType: TextInputType.emailAddress,
-                validator: (value) => value!.isEmpty ? 'Please enter your email.' : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  prefixIcon: Icon(Icons.lock),
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
                 ),
-                onSaved: (value) => _password = value!.trim(),
-                obscureText: true,
-                validator: (value) =>
-                    value!.length < 6 ? 'Password must be at least 6 characters.' : null,
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _signIn,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                child: const Text('Sign In'),
-              ),
-              const SizedBox(height: 10),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -3152,6 +4133,8 @@ class _SignUpDialogState extends State<SignUpDialog> {
               'displayName': _displayName,
               'photoURL': user.photoURL ?? 'https://via.placeholder.com/40',
               'lastUpdated': DateTime.now().millisecondsSinceEpoch,
+              'isOnline': true,
+              'lastOnline': DateTime.now().millisecondsSinceEpoch,
             }),
             
             // Initialize user profile with default settings
@@ -3177,83 +4160,91 @@ class _SignUpDialogState extends State<SignUpDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      elevation: 4.0,
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              const Text(
-                "Create Account",
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              if (_errorMessage.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.red[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red[200]!),
+    return NotificationListener<ScrollNotification>(
+      // This prevents scroll events from propagating to the map
+      onNotification: (notification) {
+    // Prevent scroll notifications from propagating to parent
+    return true;
+  },
+      // This prevents gesture events from propagating to the map
+      child: Material(
+        elevation: 4.0,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                const Text(
+                  "Create Account",
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue,
                   ),
-                  child: Text(
-                    _errorMessage, 
-                    style: TextStyle(color: Colors.red[800]),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                if (_errorMessage.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.red[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red[200]!),
+                    ),
+                    child: Text(
+                      _errorMessage, 
+                      style: TextStyle(color: Colors.red[800]),
+                    ),
                   ),
+                TextFormField(
+                  decoration: const InputDecoration(
+                    labelText: 'Display Name',
+                    prefixIcon: Icon(Icons.person),
+                  ),
+                  onSaved: (value) => _displayName = value!.trim(),
+                  validator: (value) => value!.isEmpty ? 'Please enter your display name.' : null,
                 ),
-              TextFormField(
-                decoration: const InputDecoration(
-                  labelText: 'Display Name',
-                  prefixIcon: Icon(Icons.person),
+                const SizedBox(height: 16),
+                TextFormField(
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    prefixIcon: Icon(Icons.email),
+                  ),
+                  onSaved: (value) => _email = value!.trim(),
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (value) => value!.isEmpty ? 'Please enter your email.' : null,
                 ),
-                onSaved: (value) => _displayName = value!.trim(),
-                validator: (value) => value!.isEmpty ? 'Please enter your display name.' : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  prefixIcon: Icon(Icons.email),
+                const SizedBox(height: 16),
+                TextFormField(
+                  decoration: const InputDecoration(
+                    labelText: 'Password',
+                    prefixIcon: Icon(Icons.lock),
+                  ),
+                  onSaved: (value) => _password = value!.trim(),
+                  obscureText: true,
+                  validator: (value) =>
+                      value!.length < 6 ? 'Password must be at least 6 characters.' : null,
                 ),
-                onSaved: (value) => _email = value!.trim(),
-                keyboardType: TextInputType.emailAddress,
-                validator: (value) => value!.isEmpty ? 'Please enter your email.' : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  prefixIcon: Icon(Icons.lock),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: _signUp,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: const Text('Sign Up'),
                 ),
-                onSaved: (value) => _password = value!.trim(),
-                obscureText: true,
-                validator: (value) =>
-                    value!.length < 6 ? 'Password must be at least 6 characters.' : null,
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _signUp,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
                 ),
-                child: const Text('Sign Up'),
-              ),
-              const SizedBox(height: 10),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

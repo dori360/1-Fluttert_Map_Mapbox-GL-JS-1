@@ -11,11 +11,67 @@
         padding: 0;
         height: 100%;
       }
+      
+      .user-marker {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background-size: cover;
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        transition: all 0.3s ease;
+      }
+      
+      .user-marker:hover {
+        transform: scale(1.2);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+        z-index: 100;
+      }
+      
+      .current-user-marker {
+        border: 3px solid #0066ff;
+      }
+      
+      .other-user-marker {
+        border: 3px solid #ff6600;
+      }
+      
+      .mapboxgl-popup-content {
+        padding: 10px;
+        text-align: center;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      }
+      
+      .user-stats-popup {
+        position: absolute;
+        background-color: rgba(0,0,0,0.9);
+        color: white;
+        padding: 12px;
+        border-radius: 12px;
+        font-size: 13px;
+        max-width: 200px;
+        z-index: 1000;
+        pointer-events: none;
+        display: none;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        border: 1px solid rgba(255,255,255,0.2);
+        backdrop-filter: blur(2px);
+      }
+      
+      .user-stats-popup strong {
+        color: #ff9900;
+        display: block;
+        margin-bottom: 5px;
+        font-size: 14px;
+      }
+      
+      .user-stats-popup div {
+        margin-bottom: 3px;
+        padding-left: 5px;
+        border-left: 2px solid #ff9900;
+      }
     </style>
-    <script src="https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.11.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.11.1/firebase-storage.js"></script>
     <script>
       mapboxgl.accessToken = 'pk.eyJ1IjoiZGFtb3NzIiwiYSI6ImNtNnRyZzk5MTA2NzkyaXExN2EyNTR1dWsifQ.UdaXenvYULYz6lkQbLU1hg';
 
@@ -24,63 +80,215 @@
       let profilePictureUrl = null;
       let userMarker = null;
       let otherUsersMarkers = {};
+      
+      // Store the current user ID
+      let currentUserId = null;
+      
+      function setCurrentUserId(uid) {
+        currentUserId = uid;
+        console.log("Setting current user ID:", uid);
+      }
+      window.setCurrentUserId = setCurrentUserId;
 
+      // Enhanced setProfilePicture function to update markers immediately
       function setProfilePicture(url) {
         profilePictureUrl = url;
-        updateUserMarker();
+        console.log("Setting profile picture:", url);
+        
+        // Update user's own marker immediately if it exists
+        if (userMarker) {
+          const el = userMarker.getElement();
+          el.style.backgroundImage = `url(${url})`;
+          console.log("Updated user marker with new profile picture");
+        }
       }
+      window.setProfilePicture = setProfilePicture;
+
+      function forceUpdateLocation() {
+        // Directly try to get the user's location
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              console.log("FORCE GOT LOCATION:", position.coords);
+              userLocation = [position.coords.longitude, position.coords.latitude];
+              updateUserMarker();
+              
+              // This is critical - making user location accessible to Flutter
+              window.userLocation = userLocation;
+              console.log("Updated window.userLocation:", window.userLocation);
+              
+              // If map exists, fly to the location
+              if (map) {
+                map.flyTo({
+                  center: userLocation,
+                  zoom: 15,
+                  speed: 1.2
+                });
+              }
+            },
+            (error) => {
+              console.error("Error getting user location:", error);
+            },
+            { 
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 0
+            }
+          );
+        } else {
+          console.error("Geolocation is not supported by this browser");
+        }
+      }
+      window.forceUpdateLocation = forceUpdateLocation;
 
       function updateUserMarker() {
-        if (userLocation && profilePictureUrl && map) {
+        if (!map) return;
+        
+        if (userLocation) {
           if (userMarker) {
             userMarker.setLngLat(userLocation);
           } else {
             const el = document.createElement('div');
-            el.style.backgroundImage = `url(${profilePictureUrl})`;
-            el.style.width = '40px';
-            el.style.height = '40px';
-            el.style.borderRadius = '50%';
-            el.style.backgroundSize = 'cover';
+            el.className = 'user-marker current-user-marker';
+            el.style.backgroundImage = profilePictureUrl ? 
+              `url(${profilePictureUrl})` : 
+              `url(https://via.placeholder.com/40)`;
+            
             userMarker = new mapboxgl.Marker({ element: el })
               .setLngLat(userLocation)
               .addTo(map);
           }
-        } else if (userMarker) {
-          userMarker.remove();
-          userMarker = null;
         }
       }
 
-      function updateOtherUsersMarkers(users) {
+      function updateOtherUsersMarkers(usersData) {
+        console.log("Updating other users markers:", usersData);
+        
+        if (!map || !currentUserId) {
+          console.warn("Map or current user ID not initialized yet");
+          return;
+        }
+        
+        // Clear old markers
         for (const uid in otherUsersMarkers) {
-          if (!users[uid]) {
-            otherUsersMarkers[uid].remove();
-            delete otherUsersMarkers[uid];
+          otherUsersMarkers[uid].remove();
+          
+          // Also remove any existing stat popups
+          const existingPopup = document.getElementById(`stats-popup-${uid}`);
+          if (existingPopup) {
+            existingPopup.remove();
           }
         }
-        for (const uid in users) {
-          const { location, photoURL } = users[uid];
-          if (otherUsersMarkers[uid]) {
-            otherUsersMarkers[uid].setLngLat(location);
-          } else {
+        otherUsersMarkers = {};
+        
+        // Skip if empty data
+        if (!usersData || Object.keys(usersData).length === 0) {
+          console.log("No other users to display");
+          return;
+        }
+        
+        // Add markers for each user
+        for (const uid in usersData) {
+          try {
+            // Skip if this is the current user
+            if (uid === currentUserId) continue;
+            
+            const userData = usersData[uid];
+            
+            // Skip if no valid location data
+            if (!userData || !userData.longitude || !userData.latitude) {
+              console.warn(`Invalid location data for user ${uid}`);
+              continue;
+            }
+            
+            // Create marker element
             const el = document.createElement('div');
-            el.style.backgroundImage = `url(${photoURL})`;
-            el.style.width = '40px';
-            el.style.height = '40px';
-            el.style.borderRadius = '50%';
-            el.style.backgroundSize = 'cover';
-            otherUsersMarkers[uid] = new mapboxgl.Marker({ element: el })
-              .setLngLat(location)
+            el.className = 'user-marker other-user-marker';
+            el.id = `marker-${uid}`;
+            el.style.backgroundImage = userData.photoURL ? 
+              `url(${userData.photoURL})` : 
+              `url(https://via.placeholder.com/40)`;
+            
+            // Add click event to show profile
+            el.addEventListener('click', () => {
+              console.log(`User marker clicked: ${uid}`);
+              // Close any open popups first to avoid accessibility issues
+              closeAllPopups();
+              // Call the Dart function to show user profile
+              if (window.showUserProfile) {
+                window.showUserProfile(uid);
+              }
+            });
+            
+            // Create popup with user info
+            const popup = new mapboxgl.Popup({ offset: 25 })
+              .setHTML(`<strong>${userData.displayName || 'User'}</strong>`);
+            
+            // Create the marker
+            const marker = new mapboxgl.Marker({ element: el })
+              .setLngLat([userData.longitude, userData.latitude])
+              .setPopup(popup)
               .addTo(map);
+            
+            // Add stats popup for hover
+            const statsPopup = document.createElement('div');
+            statsPopup.className = 'user-stats-popup';
+            statsPopup.id = `stats-popup-${uid}`;
+            
+            // Build stats HTML
+            let statsHTML = `<strong>${userData.displayName || 'User'}</strong>`;
+            
+            if (userData.age) statsHTML += `<div>Age: ${userData.age}</div>`;
+            if (userData.height) statsHTML += `<div>Height: ${userData.height} cm</div>`;
+            if (userData.weight) statsHTML += `<div>Weight: ${userData.weight} kg</div>`;
+            if (userData.bodyType) statsHTML += `<div>Body Type: ${userData.bodyType}</div>`;
+            if (userData.sexuality) statsHTML += `<div>Sexuality: ${userData.sexuality}</div>`;
+            
+            statsPopup.innerHTML = statsHTML;
+            
+            // Append to body
+            document.body.appendChild(statsPopup);
+            
+            // Show stats on hover
+            el.addEventListener('mouseenter', () => {
+              const markerRect = el.getBoundingClientRect();
+              statsPopup.style.left = (markerRect.right + 10) + 'px';
+              statsPopup.style.top = markerRect.top + 'px';
+              statsPopup.style.display = 'block';
+            });
+            
+            el.addEventListener('mouseleave', () => {
+              statsPopup.style.display = 'none';
+            });
+            
+            otherUsersMarkers[uid] = marker;
+          } catch (err) {
+            console.error(`Error creating marker for user ${uid}:`, err);
           }
         }
+        
+        console.log(`Added ${Object.keys(otherUsersMarkers).length} user markers to map`);
       }
       window.updateOtherUsersMarkers = updateOtherUsersMarkers;
+
+      function closeAllPopups() {
+        // Close any open popups that might have accessibility issues
+        const closeButtons = document.querySelectorAll('.mapboxgl-popup-close-button');
+        
+        // Click each close button to properly close the popups
+        closeButtons.forEach(button => {
+          button.click();
+        });
+        
+        console.log("Closed all mapbox popups");
+      }
+      window.closeAllPopups = closeAllPopups;
 
       function initializeMap() {
         const tryInitialize = (retries) => {
           const container = document.getElementById('mapbox-map');
           if (container) {
+            console.log("Initializing map...");
             const defaultLocation = [-122.4194, 37.7749];
             map = new mapboxgl.Map({
               container: 'mapbox-map',
@@ -88,42 +296,76 @@
               center: defaultLocation,
               zoom: 12,
             });
+            
             map.addControl(new mapboxgl.NavigationControl());
+            
             const geolocateControl = new mapboxgl.GeolocateControl({
               positionOptions: { enableHighAccuracy: true },
               trackUserLocation: true,
               showUserHeading: true,
             });
+            
             map.addControl(geolocateControl);
 
+            // When user location is found through the geolocation control
             geolocateControl.on('geolocate', (position) => {
+              console.log("Geolocated user position:", position.coords);
               userLocation = [position.coords.longitude, position.coords.latitude];
+              
+              // This is key - expose the location to Flutter
+              window.userLocation = userLocation;
+              console.log("Set window.userLocation:", window.userLocation);
+              
               updateUserMarker();
             });
 
-            if (navigator.geolocation) {
-              navigator.geolocation.getCurrentPosition(
-                (position) => {
-                  userLocation = [position.coords.longitude, position.coords.latitude];
-                  map.flyTo({ center: userLocation, zoom: 16, speed: 1.2 });
-                  updateUserMarker();
-                },
-                (error) => {
-                  console.error("Error fetching current location:", error);
-                },
-                { enableHighAccuracy: true },
-              );
-            }
+            // When map is loaded, force a location update
+            map.on('load', () => {
+              console.log("Map loaded, forcing location update");
+              setTimeout(() => {
+                forceUpdateLocation();
+              }, 1000);
+            });
+            
+            console.log("Map initialization complete");
           } else if (retries > 0) {
             setTimeout(() => tryInitialize(retries - 1), 500);
           } else {
-            console.error("Container 'mapbox-map' not found after retries.");
+            console.error("Container 'mapbox-map' not found after retries");
           }
         };
+        
         tryInitialize(10);
       }
 
+      // Fix for map rendering issue after inspector is closed
+      window.addEventListener('resize', () => {
+        if (map) {
+          // Force map to resize
+          setTimeout(() => {
+            map.resize();
+            console.log("Map resized due to window resize event");
+          }, 100);
+        }
+      });
+
+      // Additional event listener for devtools opening/closing
+      let lastHeight = window.innerHeight;
+      setInterval(() => {
+        if (lastHeight != window.innerHeight) {
+          lastHeight = window.innerHeight;
+          if (map) {
+            // Force map to resize
+            setTimeout(() => {
+              map.resize();
+              console.log("Map resized due to height change");
+            }, 100);
+          }
+        }
+      }, 500);
+
       window.addEventListener('load', () => {
+        console.log("Window loaded, initializing map...");
         setTimeout(initializeMap, 500);
       });
     </script>
@@ -132,3 +374,4 @@
     <script src="main.dart.js"></script>
   </body>
 </html>
+

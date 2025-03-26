@@ -1,0 +1,11 @@
+targets:
+  $default:
+    builders:
+      build_web_compilers|entrypoint:
+        options:
+          dart2js_args:
+            - --no-minify
+            - --no-source-maps
+            - --omit-implicit-checks
+            - --trust-primitives
+            - --csp
