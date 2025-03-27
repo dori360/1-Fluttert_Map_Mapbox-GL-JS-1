@@ -26,3 +26,8 @@ Now Users can message each other.
 But there are some minor errors in the console. 
 Ai will still need to be added to this program. 
 
+# V1.0.7
+
+
+# V1.0.8
+
