@@ -1773,13 +1773,17 @@ if (currentUserData != null &&
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Color(0xFF0D1B2A), // Very dark blue, almost black
         title: const Text(
           "Rimmies",
           style: TextStyle(
             fontSize: 24, // Increased from default
             fontWeight: FontWeight.bold,
+            color: Colors.white, // Add this line to make the text white
+
           ),
         ),
+        centerTitle: true,  // Add this line
         toolbarHeight: 70, // Increased from default ~56
         actions: [
           StreamBuilder<User?>(
@@ -4251,3 +4255,4 @@ class _SignUpDialogState extends State<SignUpDialog> {
     );
   }
 }
+

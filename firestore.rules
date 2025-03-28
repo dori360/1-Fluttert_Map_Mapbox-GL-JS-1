@@ -7,23 +7,18 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.uid == userId;
     }
     
-    // Allow authenticated users to read/write their own user_locations
+    // Allow anyone to read user_locations and only allow writes by the owner
     match /user_locations/{userId} {
       allow read: if true;
       allow write: if request.auth != null && request.auth.uid == userId;
     }
     
-    // Allow users to read and write to chat documents where they are a member
+    // Chat messages with members array check
     match /chat_messages/{chatId} {
-      allow read, write: if request.auth != null && 
-                          (chatId.matches('.*' + request.auth.uid + '.*') || 
-                           (exists(/databases/$(database)/documents/chat_messages/$(chatId)) && 
-                            request.auth.uid in get(/databases/$(database)/documents/chat_messages/$(chatId)).data.members));
+      allow read, write: if request.auth != null && request.auth.uid in resource.data.members;
       
-      // Allow users to read and write messages in chats they are members of
       match /messages/{messageId} {
-        allow read, write: if request.auth != null && 
-                            exists(/databases/$(database)/documents/chat_messages/$(chatId)) && 
+        allow read, write: if request.auth != null &&
                             request.auth.uid in get(/databases/$(database)/documents/chat_messages/$(chatId)).data.members;
       }
     }

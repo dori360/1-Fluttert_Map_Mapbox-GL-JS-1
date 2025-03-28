@@ -27,7 +27,14 @@ But there are some minor errors in the console.
 Ai will still need to be added to this program. 
 
 # V1.0.7
-
+Last workign version with group features. 
 
 # V1.0.8
+Deleted un-needed files 
+
+# V1.0.9 
+Just Changed style of map and top banner. 
+
+Everything is the same from # V1.0.8, rules are for testing right now. 
+
 
