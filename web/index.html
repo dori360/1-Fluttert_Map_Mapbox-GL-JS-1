@@ -2,10 +2,12 @@
 <html>
   <head>
     <meta charset="UTF-8">
-    <title>My Flutter Mapbox App</title>
-    <link href="https://api.mapbox.com/mapbox-gl-js/v2.7.0/mapbox-gl.css" rel="stylesheet" />
-    <script src="https://api.mapbox.com/mapbox-gl-js/v2.7.0/mapbox-gl.js"></script>
+    <title>My Flutter MapLibre App</title>
+    <!-- Section 1: Map Library Imports -->
+    <link href="https://cdn.jsdelivr.net/npm/maplibre-gl@2.4.0/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@2.4.0/dist/maplibre-gl.js"></script>
     <style>
+      /* Section 2: CSS Styles */
       html, body {
         margin: 0;
         padding: 0;
@@ -36,7 +38,7 @@
         border: 3px solid #ff6600;
       }
       
-      .mapboxgl-popup-content {
+      .maplibregl-popup-content {
         padding: 10px;
         text-align: center;
         border-radius: 12px;
@@ -79,49 +81,47 @@
       }
       
       /* Improved UI controls */
-      .mapboxgl-ctrl-group {
+      .maplibregl-ctrl-group {
         box-shadow: 0 4px 10px rgba(0,0,0,0.2) !important;
         border-radius: 12px !important;
       }
       
-      .mapboxgl-ctrl button {
+      .maplibregl-ctrl button {
         width: 40px !important; 
         height: 40px !important;
       }
       
-      .mapboxgl-popup {
+      .maplibregl-popup {
         max-width: 280px !important;
       }
       
-      .mapboxgl-popup-content {
+      .maplibregl-popup-content {
         background-color: rgba(255,255,255,0.95) !important;
         backdrop-filter: blur(5px);
       }
     </style>
     <script>
-      mapboxgl.accessToken = 'pk.eyJ1IjoiZGFtb3NzIiwiYSI6ImNtNnRyZzk5MTA2NzkyaXExN2EyNTR1dWsifQ.UdaXenvYULYz6lkQbLU1hg';
-
+      /* Section 3: Main JavaScript Code */
+      // 3.1: Global variables
       let map;
       let userLocation = null;
       let profilePictureUrl = null;
       let userMarker = null;
       let otherUsersMarkers = {};
-      
-      // Store the current user ID
       let currentUserId = null;
       
+      // 3.2: User ID management
       function setCurrentUserId(uid) {
         currentUserId = uid;
         console.log("Setting current user ID:", uid);
       }
       window.setCurrentUserId = setCurrentUserId;
 
-      // Enhanced setProfilePicture function to update markers immediately
+      // 3.3: Profile picture management
       function setProfilePicture(url) {
         profilePictureUrl = url;
         console.log("Setting profile picture:", url);
         
-        // Update user's own marker immediately if it exists
         if (userMarker) {
           const el = userMarker.getElement();
           el.style.backgroundImage = `url(${url})`;
@@ -130,8 +130,8 @@
       }
       window.setProfilePicture = setProfilePicture;
 
+      // 3.4: Location update function
       function forceUpdateLocation() {
-        // Directly try to get the user's location
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
             (position) => {
@@ -139,11 +139,9 @@
               userLocation = [position.coords.longitude, position.coords.latitude];
               updateUserMarker();
               
-              // This is critical - making user location accessible to Flutter
               window.userLocation = userLocation;
               console.log("Updated window.userLocation:", window.userLocation);
               
-              // If map exists, fly to the location
               if (map) {
                 map.flyTo({
                   center: userLocation,
@@ -167,6 +165,7 @@
       }
       window.forceUpdateLocation = forceUpdateLocation;
 
+      // 3.5: User marker update function
       function updateUserMarker() {
         if (!map) return;
         
@@ -180,13 +179,14 @@
               `url(${profilePictureUrl})` : 
               `url(https://via.placeholder.com/40)`;
             
-            userMarker = new mapboxgl.Marker({ element: el })
+            userMarker = new maplibregl.Marker({ element: el })
               .setLngLat(userLocation)
               .addTo(map);
           }
         }
       }
 
+      // 3.6: Other users markers update function
       function updateOtherUsersMarkers(usersData) {
         console.log("Updating other users markers:", usersData);
         
@@ -260,14 +260,14 @@
             if (userData.sexuality) popupHTML += `<div>Sexuality: ${userData.sexuality}</div>`;
             
             // Create popup with user info
-            const popup = new mapboxgl.Popup({ 
+            const popup = new maplibregl.Popup({ 
               offset: 25,
               closeButton: false,
               closeOnClick: false
             }).setHTML(popupHTML);
             
             // Create the marker
-            const marker = new mapboxgl.Marker({ element: el })
+            const marker = new maplibregl.Marker({ element: el })
               .setLngLat([userData.longitude, userData.latitude])
               .setPopup(popup)
               .addTo(map);
@@ -291,36 +291,37 @@
       }
       window.updateOtherUsersMarkers = updateOtherUsersMarkers;
       
-      // Add this function to close all popups
+      // 3.7: Popup management function
       function closeAllPopups() {
         // Close any open popups that might have accessibility issues
-        const closeButtons = document.querySelectorAll('.mapboxgl-popup-close-button');
+        const closeButtons = document.querySelectorAll('.maplibregl-popup-close-button');
         
         // Click each close button to properly close the popups
         closeButtons.forEach(button => {
           button.click();
         });
         
-        console.log("Closed all mapbox popups");
+        console.log("Closed all maplibre popups");
       }
       window.closeAllPopups = closeAllPopups;
 
+      // 3.8: Map initialization function
       function initializeMap() {
         const tryInitialize = (retries) => {
           const container = document.getElementById('mapbox-map');
           if (container) {
             console.log("Initializing map...");
             const defaultLocation = [-122.4194, 37.7749];
-            map = new mapboxgl.Map({
+            map = new maplibregl.Map({
               container: 'mapbox-map',
-              style: 'mapbox://styles/damoss/clnz0vs58009p01qs66n5bkix', 
+              style: 'https://tiles.stadiamaps.com/styles/alidade_smooth_dark.json?api_key=your-stadia-api-key', // Replace with your actual API key
               center: defaultLocation,
               zoom: 12,
             });
             
-            map.addControl(new mapboxgl.NavigationControl());
+            map.addControl(new maplibregl.NavigationControl());
             
-            const geolocateControl = new mapboxgl.GeolocateControl({
+            const geolocateControl = new maplibregl.GeolocateControl({
               positionOptions: { enableHighAccuracy: true },
               trackUserLocation: true,
               showUserHeading: true,
@@ -359,7 +360,7 @@
         tryInitialize(10);
       }
 
-      // Fix for map rendering issue after inspector is closed
+      // 3.9: Map resizing handlers
       window.addEventListener('resize', () => {
         if (map) {
           // Force map to resize
@@ -370,7 +371,7 @@
         }
       });
 
-      // Additional event listener for devtools opening/closing
+      // 3.10: Additional resize monitoring
       let lastHeight = window.innerHeight;
       setInterval(() => {
         if (lastHeight != window.innerHeight) {
@@ -385,7 +386,7 @@
         }
       }, 500);
 
-      // Prevent scrolling over dialog
+      // 3.11: Event listeners for dialog interactions
       document.addEventListener('wheel', function(e) {
         const targetElement = e.target;
         
@@ -396,14 +397,61 @@
         }
       }, { passive: false });
 
+      // 3.12: Initialize map on page load
       window.addEventListener('load', () => {
         console.log("Window loaded, initializing map...");
         setTimeout(initializeMap, 500);
       });
+      
+      // 3.13: Prevent map interaction when dialogs are open
+      function preventMapInteraction() {
+        // Handle mouse wheel events
+        document.addEventListener('wheel', function(e) {
+          if (e.target.closest('.flutter-dialog') || 
+              e.target.closest('flt-glass-pane') || // This targets Flutter overlay
+              e.target.closest('.stop-propagation')) {
+            e.stopPropagation();
+            e.preventDefault();
+          }
+        }, { passive: false });
+        
+        // Handle touch events for mobile
+        document.addEventListener('touchmove', function(e) {
+          if (e.target.closest('.flutter-dialog') || 
+              e.target.closest('flt-glass-pane') ||
+              e.target.closest('.stop-propagation')) {
+            // Don't prevent default completely as it will stop scrolling in the dialog
+            // Just stop it from propagating to the map
+            e.stopPropagation();
+          }
+        }, { passive: false });
+        
+        // 3.13.1: Disable map interactions
+        window.disableMapInteractions = function() {
+          if (map) {
+            map.dragPan.disable();
+            map.scrollZoom.disable();
+            map.touchZoomRotate.disable();
+            console.log("Map interactions disabled");
+          }
+        };
+        
+        // 3.13.2: Enable map interactions
+        window.enableMapInteractions = function() {
+          if (map) {
+            map.dragPan.enable();
+            map.scrollZoom.enable();
+            map.touchZoomRotate.enable();
+            console.log("Map interactions enabled");
+          }
+        };
+      }
+
+      // Call this after map initialization
+      preventMapInteraction();
     </script>
   </head>
   <body>
     <script src="main.dart.js"></script>
   </body>
 </html>
-

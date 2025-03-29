@@ -1,10 +1,9 @@
   [
     {
-      "origin": ["http://localhost:8080", "https://fluttert-map-mapbox-gl-js.web.app", "https://mapbox-in-javascript.web.app"],
-      "method": ["GET", "POST", "PUT", "DELETE"],
-      "responseHeader": ["Content-Type", "Authorization"],
+      "origin": ["http://localhost:8080", "https://fluttert-map-mapbox-gl-js.web.app", "https://mapbox-in-javascript.web.app", "https://rimmies.net"],
+      "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
+      "responseHeader": ["Content-Type", "Authorization", "Content-Length", "User-Agent"],
       "maxAgeSeconds": 3600
     }
   ]
-  
-  
+

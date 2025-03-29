@@ -15,6 +15,10 @@ For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
 
+# Rules for organizing code : 
+    We are gonna number every class, method and widget in the code. 
+
+
 # V1.0.4
 This version has authentication right , users can change the picture  , but when changing the picture it doesn't show instantly. you have to refresh the page to update. 
 
@@ -34,7 +38,8 @@ Deleted un-needed files
 
 # V1.0.9 
 Just Changed style of map and top banner. 
-
 Everything is the same from # V1.0.8, rules are for testing right now. 
 
+# V1.1.0
+Will change map from mapbox to map libre with a custom style. changed it to Stadia Maps Dark Style. but working on a custom style for now. 
 

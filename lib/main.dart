@@ -15,7 +15,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
-// User profile data model class
+//==============================================================================
+// SECTION 1: DATA MODELS
+//==============================================================================
+
+// 1.1: User Profile Data Model
 class UserProfileData {
   String? displayName;
   String? photoURL;
@@ -28,6 +32,7 @@ class UserProfileData {
   String? unitSystem; // 'metric' or 'imperial'
   Map<String, dynamic>? additionalPictures;
 
+  // 1.1.1: Constructor
   UserProfileData({
     this.displayName,
     this.photoURL,
@@ -41,6 +46,7 @@ class UserProfileData {
     this.additionalPictures,
   });
 
+  // 1.1.2: Factory constructor from Map
   factory UserProfileData.fromMap(Map<String, dynamic>? data) {
     if (data == null) return UserProfileData();
     
@@ -58,6 +64,7 @@ class UserProfileData {
     );
   }
 
+  // 1.1.3: Convert to Map method
   Map<String, dynamic> toMap() {
     return {
       if (displayName != null) 'displayName': displayName,
@@ -73,7 +80,7 @@ class UserProfileData {
     };
   }
   
-  // Convert height from cm to feet/inches if using imperial
+  // 1.1.4: Format height method
   String getFormattedHeight() {
     if (height == null) return "Not set";
     
@@ -88,7 +95,7 @@ class UserProfileData {
     }
   }
   
-  // Convert weight from kg to lbs if using imperial
+  // 1.1.5: Format weight method
   String getFormattedWeight() {
     if (weight == null) return "Not set";
     
@@ -102,6 +109,11 @@ class UserProfileData {
   }
 }
 
+//==============================================================================
+// SECTION 2: MAIN APP INITIALIZATION
+//==============================================================================
+
+// 2.1: Main entry point
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
@@ -116,12 +128,13 @@ Future<void> main() async {
     ),
   );
 
-  // Set up Firestore settings - crucial for preventing some errors
+  // 2.2: Configure Firestore settings
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
     cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
   );
 
+  // 2.3: Register MapLibre view factory
   ui.platformViewRegistry.registerViewFactory('mapbox-gl-element', (int viewId) {
     final div = DivElement()
       ..id = 'mapbox-map'
@@ -130,7 +143,7 @@ Future<void> main() async {
     return div;
   });
 
-  // Register a callback function for user click in JavaScript
+  // 2.4: Register JavaScript user profile callback
   js.context['showUserProfile'] = (String userId) {
     // This will be called from JavaScript when a user marker is clicked
     print("User profile requested for: $userId");
@@ -147,16 +160,23 @@ Future<void> main() async {
     }
   };
 
+  // 2.5: Run the app
   runApp(const MyApp());
 }
 
+//==============================================================================
+// SECTION 3: APP DEFINITION
+//==============================================================================
+
+// 3.1: Main App widget
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  // 3.1.1: Build method
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Mapbox & Firebase Integration',
+      title: 'MapLibre & Firebase Integration',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.blue,
@@ -187,14 +207,22 @@ class MyApp extends StatelessWidget {
   }
 }
 
+//==============================================================================
+// SECTION 4: MAP SCREEN
+//==============================================================================
+
+// 4.1: Map Screen Widget
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
 
+  // 4.1.1: Create state method
   @override
   _MapScreenState createState() => _MapScreenState();
 }
 
+// 4.2: Map Screen State
 class _MapScreenState extends State<MapScreen> {
+  // 4.2.1: State variables
   Timer? _locationUpdateTimer;
   Timer? _fetchUsersTimer;
   StreamSubscription<User?>? _authSubscription;
@@ -205,12 +233,13 @@ class _MapScreenState extends State<MapScreen> {
   // Store user data for quick access
   Map<String, Map<String, dynamic>> _usersData = {};
   
-  // Add these new variables 
+  // Messaging variables
   bool _hasUnreadMessages = false;
   int _unreadCount = 0;
   double _visibilityRadius = 5.0; // Default 5 miles radius
   StreamSubscription<QuerySnapshot>? _messagesSubscription;
   
+  // 4.2.2: Init state method
   @override
   void initState() {
     super.initState();
@@ -265,6 +294,7 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
+  // 4.2.3: Dispose method
   @override
   void dispose() {
     // Set online status to false before disposing
@@ -278,7 +308,7 @@ class _MapScreenState extends State<MapScreen> {
     super.dispose();
   }
   
-  // New method to update online status in Firestore
+  // 4.2.4: Update online status method
   Future<void> _updateOnlineStatus(bool isOnline) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null && _currentUserId != null) {
@@ -297,7 +327,7 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
   
-  // Add this method to start listening for unread messages
+  // 4.2.5: Message listening methods
   void _startListeningForUnreadMessages() {
     _messagesSubscription?.cancel();
     
@@ -340,22 +370,26 @@ class _MapScreenState extends State<MapScreen> {
         });
   }
   
+  // 4.2.6: Stop listening for unread messages
   void _stopListeningForUnreadMessages() {
     _messagesSubscription?.cancel();
     _messagesSubscription = null;
   }
   
+  // 4.2.7: Force location update
   void _forceLocationUpdate() {
     // Call the JavaScript function to force a location update
     js.context.callMethod('forceUpdateLocation');
     print("Forced location update from Dart");
   }
 
+  // 4.2.8: Stop location updates
   void _stopLocationUpdates() {
     _locationUpdateTimer?.cancel();
     _locationUpdateTimer = null;
   }
   
+  // 4.2.9: Start fetching user locations
   void _startFetchingUserLocations() {
     _fetchUsersTimer?.cancel();
     _fetchUsersTimer = null;
@@ -372,71 +406,71 @@ class _MapScreenState extends State<MapScreen> {
         final Map<String, Map<String, dynamic>> users = {};
         
         print("Got ${snapshot.docs.length} user location documents (real-time)");
-for (var doc in snapshot.docs) {
-  try {
-    final String uid = doc.id;
-    
-    // Skip current user
-    if (uid == _currentUserId) continue;
-    
-    final Map<String, dynamic> data = doc.data();
-    
-    // Only include users with valid location data
-    if (data.containsKey('longitude') && data.containsKey('latitude')) {
-      // Calculate distance to filter users within radius
-      if (_currentUserId != null && data.containsKey('longitude') && data.containsKey('latitude')) {
-        // Find current user document without using firstWhere
-        DocumentSnapshot? currentUserDoc = null;
-        for (var d in snapshot.docs) {
-          if (d.id == _currentUserId) {
-            currentUserDoc = d;
-            break;
+        for (var doc in snapshot.docs) {
+          try {
+            final String uid = doc.id;
+            
+            // Skip current user
+            if (uid == _currentUserId) continue;
+            
+            final Map<String, dynamic> data = doc.data();
+            
+            // Only include users with valid location data
+            if (data.containsKey('longitude') && data.containsKey('latitude')) {
+              // Calculate distance to filter users within radius
+              if (_currentUserId != null && data.containsKey('longitude') && data.containsKey('latitude')) {
+                // Find current user document without using firstWhere
+                DocumentSnapshot? currentUserDoc = null;
+                for (var d in snapshot.docs) {
+                  if (d.id == _currentUserId) {
+                    currentUserDoc = d;
+                    break;
+                  }
+                }
+                
+                if (currentUserDoc == null) {
+                  continue; // Skip to next user if we can't find current user doc
+                }
+                
+                // Cast the result to Map<String, dynamic>
+                final currentUserData = currentUserDoc.data() as Map<String, dynamic>?;
+                        
+                if (currentUserData != null && 
+                    currentUserData.containsKey('longitude') && 
+                    currentUserData.containsKey('latitude')) {
+                  
+                  // Calculate distance between current user and this user
+                  final distance = _calculateDistance(
+                    currentUserData['latitude'], 
+                    currentUserData['longitude'],
+                    data['latitude'], 
+                    data['longitude']
+                  );
+                          
+                  // Only include user if within the visibility radius (in miles)
+                  if (distance <= _visibilityRadius) {
+                    users[uid] = {
+                      'longitude': data['longitude'],
+                      'latitude': data['latitude'],
+                      'photoURL': data['photoURL'] ?? 'https://via.placeholder.com/40',
+                      'displayName': data['displayName'] ?? 'User',
+                      'lastUpdated': data['lastUpdated'] ?? DateTime.now().millisecondsSinceEpoch,
+                      'distance': distance.toStringAsFixed(1), // Add distance for display
+                      // Include other profile data if available
+                      if (data.containsKey('age')) 'age': data['age'],
+                      if (data.containsKey('height')) 'height': data['height'],
+                      if (data.containsKey('weight')) 'weight': data['weight'],
+                      if (data.containsKey('bodyType')) 'bodyType': data['bodyType'],
+                      if (data.containsKey('sexuality')) 'sexuality': data['sexuality'],
+                    };
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            print("Error processing document ${doc.id}: $e");
           }
         }
-        
-        if (currentUserDoc == null) {
-          continue; // Skip to next user if we can't find current user doc
-        }
-        
-// Cast the result to Map<String, dynamic>
-final currentUserData = currentUserDoc.data() as Map<String, dynamic>?;
-        
-if (currentUserData != null && 
-    currentUserData.containsKey('longitude') && 
-    currentUserData.containsKey('latitude')) {
-  
-  // Calculate distance between current user and this user
-  final distance = _calculateDistance(
-    currentUserData['latitude'], 
-    currentUserData['longitude'],
-    data['latitude'], 
-    data['longitude']
-  );
-          
-          // Only include user if within the visibility radius (in miles)
-          if (distance <= _visibilityRadius) {
-            users[uid] = {
-              'longitude': data['longitude'],
-              'latitude': data['latitude'],
-              'photoURL': data['photoURL'] ?? 'https://via.placeholder.com/40',
-              'displayName': data['displayName'] ?? 'User',
-              'lastUpdated': data['lastUpdated'] ?? DateTime.now().millisecondsSinceEpoch,
-              'distance': distance.toStringAsFixed(1), // Add distance for display
-              // Include other profile data if available
-              if (data.containsKey('age')) 'age': data['age'],
-              if (data.containsKey('height')) 'height': data['height'],
-              if (data.containsKey('weight')) 'weight': data['weight'],
-              if (data.containsKey('bodyType')) 'bodyType': data['bodyType'],
-              if (data.containsKey('sexuality')) 'sexuality': data['sexuality'],
-            };
-          }
-        }
-      }
-    }
-  } catch (e) {
-    print("Error processing document ${doc.id}: $e");
-  }
-}
         
         // Store users data for access in profile dialog
         _usersData = users;
@@ -451,7 +485,7 @@ if (currentUserData != null &&
       });
   }
 
-  // Add this method to calculate distance between two points in miles
+  // 4.2.10: Calculate distance between coordinates
   double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
     const double earthRadius = 3958.8; // Earth radius in miles
     
@@ -468,10 +502,12 @@ if (currentUserData != null &&
     return earthRadius * c; // Distance in miles
   }
   
+  // 4.2.11: Convert degrees to radians
   double _toRadians(double degrees) {
     return degrees * pi / 180;
   }
 
+  // 4.2.12: Start periodic fetching (fallback)
   void _startPeriodicFetching() {
     _fetchUsersTimer?.cancel();
     // Fetch locations immediately
@@ -482,6 +518,7 @@ if (currentUserData != null &&
     });
   }
 
+  // 4.2.13: Stop fetching user locations
   void _stopFetchingUserLocations() {
     _fetchUsersTimer?.cancel();
     _fetchUsersTimer = null;
@@ -494,6 +531,7 @@ if (currentUserData != null &&
     js.context.callMethod('updateOtherUsersMarkers', [js.JsObject.jsify({})]);
   }
 
+  // 4.2.14: Update user location
   Future<void> _updateUserLocation() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -599,6 +637,7 @@ if (currentUserData != null &&
     }
   }
 
+  // 4.2.15: Fetch user locations
   Future<void> _fetchUserLocations() async {
     if (!_isUserLoggedIn || _currentUserId == null) return;
     
@@ -784,6 +823,11 @@ if (currentUserData != null &&
     }
   }
 
+  //==============================================================================
+  // SECTION 5: MENU HANDLING
+  //==============================================================================
+
+  // 5.1: Handle menu selection
   void _handleMenuSelection(BuildContext context, String value) {
     switch (value) {
       case 'my_profile':
@@ -816,34 +860,74 @@ if (currentUserData != null &&
         showDialog(
           context: context,
           barrierColor: Colors.transparent,
-          builder: (context) => Stack(
-            children: [
-              Positioned(
-                top: kToolbarHeight,
-                right: 0,
-                width: MediaQuery.of(context).size.width * 0.4, // Increased from 0.3
-                child: const SignInDialog(),
-              ),
-            ],
-          ),
+          builder: (context) {
+            final screenSize = MediaQuery.of(context).size;
+            final isSmallScreen = screenSize.width < 600;
+            
+            return Stack(
+              children: [
+                Positioned(
+                  // Position from top
+                  top: isSmallScreen ? 10 : kToolbarHeight,
+                  // On mobile, center horizontally
+                  right: isSmallScreen ? null : 0,
+                  left: isSmallScreen ? 0 : null,
+                  // Center horizontally on mobile
+                  width: isSmallScreen
+                      ? screenSize.width * 0.9  // 90% of screen width on mobile
+                      : screenSize.width * 0.4, // 40% on desktop
+                  // Center dialog on small screens
+                  child: Center(
+                    child: Material(
+                      elevation: 8.0,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        // Add this class for JavaScript event handler
+                        key: ValueKey<String>('flutter-dialog'),
+                        child: const SignInDialog(),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         );
         break;
       case 'sign_up':
         showDialog(
           context: context,
           barrierColor: Colors.transparent,
-          builder: (context) => Stack(
-            children: [
-              Positioned(
-                top: kToolbarHeight,
-                right: 0,
-                width: MediaQuery.of(context).size.width * 0.4, // Increased from 0.3
-                child: const SignUpDialog(),
-              ),
-            ],
-          ),
+          builder: (context) {
+            final screenSize = MediaQuery.of(context).size;
+            final isSmallScreen = screenSize.width < 600;
+            
+            return Stack(
+              children: [
+                Positioned(
+                  // Position from top
+                  top: isSmallScreen ? 10 : kToolbarHeight,
+                  // On mobile, center horizontally
+                  right: isSmallScreen ? null : 0,
+                  left: isSmallScreen ? 0 : null,
+                  // Center horizontally on mobile
+                  width: isSmallScreen
+                      ? screenSize.width * 0.9  // 90% of screen width on mobile
+                      : screenSize.width * 0.4, // 40% on desktop
+                  // Center dialog on small screens
+                  child: Center(
+                    child: Material(
+                      elevation: 8.0,
+                      borderRadius: BorderRadius.circular(20),
+                      child: const SignUpDialog(),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         );
-        break;
+        break;      
       case 'change_profile_picture':
         _uploadProfilePicture(context, "main");
         break;
@@ -859,6 +943,11 @@ if (currentUserData != null &&
     }
   }
 
+  //==============================================================================
+  // SECTION 6: DIALOG MANAGEMENT
+  //==============================================================================
+
+  // 6.1: Account settings dialog
   void _showAccountSettings(BuildContext context) {
     js.context.callMethod('closeAllPopups');
     final user = FirebaseAuth.instance.currentUser;
@@ -1175,6 +1264,7 @@ if (currentUserData != null &&
     );
   }
 
+  // 6.2: Reset password dialog
   void _showResetPasswordDialog(BuildContext context) {
     js.context.callMethod('closeAllPopups');
     
@@ -1244,6 +1334,7 @@ if (currentUserData != null &&
     );
   }
 
+  // 6.3: Upgrade options dialog
   void _showUpgradeOptions(BuildContext context) {
     js.context.callMethod('closeAllPopups');
     showDialog(
@@ -1285,9 +1376,12 @@ if (currentUserData != null &&
     );
   }
 
-  // Add groups functionality
+  // 6.4: Groups dialog
   void _showGroupsDialog(BuildContext context) {
     js.context.callMethod('closeAllPopups');
+    
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 600;
     
     showDialog(
       context: context,
@@ -1295,24 +1389,35 @@ if (currentUserData != null &&
       builder: (context) => Stack(
         children: [
           Positioned(
-            top: kToolbarHeight,
-            right: 10,
-            width: 400,
-            height: MediaQuery.of(context).size.height * 0.7,
-            child: Material(
-              elevation: 8.0,
-              borderRadius: BorderRadius.circular(20),
-              child: GroupsDialog(
-                onCreateGroup: () => _showCreateGroupDialog(context),
-                onSubscribe: () => _showSubscriptionDialog(context),
-                visibilityRadius: _visibilityRadius,
-                onRadiusChanged: (value) {
-                  setState(() {
-                    _visibilityRadius = value;
-                  });
-                  // Re-fetch users when radius changes
-                  _startFetchingUserLocations();
-                },
+            top: isSmallScreen ? 10 : kToolbarHeight,
+            // Center on mobile, right-aligned on desktop
+            right: isSmallScreen ? null : 10,
+            left: isSmallScreen ? 0 : null,
+            // Use almost full width on small screens
+            width: isSmallScreen
+                ? screenSize.width * 0.95  // 95% width on mobile
+                : 400,                     // Fixed width on desktop
+            // Use percentage of screen height
+            height: isSmallScreen
+                ? screenSize.height * 0.9  // 90% of screen height on mobile
+                : MediaQuery.of(context).size.height * 0.7,  // 70% on desktop
+            // Center dialog on small screens
+            child: Center(
+              child: Material(
+                elevation: 8.0,
+                borderRadius: BorderRadius.circular(20),
+                child: GroupsDialog(
+                  onCreateGroup: () => _showCreateGroupDialog(context),
+                  onSubscribe: () => _showSubscriptionDialog(context),
+                  visibilityRadius: _visibilityRadius,
+                  onRadiusChanged: (value) {
+                    setState(() {
+                      _visibilityRadius = value;
+                    });
+                    // Re-fetch users when radius changes
+                    _startFetchingUserLocations();
+                  },
+                ),
               ),
             ),
           ),
@@ -1321,6 +1426,7 @@ if (currentUserData != null &&
     );
   }
 
+  // 6.5: Create group dialog
   void _showCreateGroupDialog(BuildContext context) {
     final nameController = TextEditingController();
     final descriptionController = TextEditingController();
@@ -1437,6 +1543,7 @@ if (currentUserData != null &&
     );
   }
 
+  // 6.6: Subscription dialog
   void _showSubscriptionDialog(BuildContext context, {String? message}) {
     showDialog(
       context: context,
@@ -1485,6 +1592,7 @@ if (currentUserData != null &&
     );
   }
 
+  // 6.7: Visibility settings dialog
   void _showVisibilitySettingsDialog(BuildContext context) {
     js.context.callMethod('closeAllPopups');
     
@@ -1530,10 +1638,13 @@ if (currentUserData != null &&
     );
   }
 
-  // Method to show user profile as a positioned dialog
+  // 6.8: User profile dialog
   void _showUserProfile(String userId) {
     // Close any open popups before showing profile
     js.context.callMethod('closeAllPopups');
+    
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 600;
     
     showDialog(
       context: context,
@@ -1541,32 +1652,55 @@ if (currentUserData != null &&
       builder: (context) => Stack(
         children: [
           Positioned(
-            top: kToolbarHeight,
-            right: 0,
-            width: 600,
-            height: MediaQuery.of(context).size.height * 0.8, // Set a fixed height
-            child: Material(
-              elevation: 8.0,
-              borderRadius: BorderRadius.circular(20),
-              child: UserProfileDialog(
-                userId: userId,
-                onMessageTap: () {
-                  // Close profile and start chat
-                  Navigator.of(context).pop();
-                  _startChatWithUser(userId);
-                },
+            top: isSmallScreen ? 10 : kToolbarHeight,
+            // Center on mobile, right-aligned on desktop
+            right: isSmallScreen ? null : 0,
+            left: isSmallScreen ? 0 : null,
+            // Use almost full width on small screens
+            width: isSmallScreen
+                ? screenSize.width * 0.95  // 95% width on mobile
+                : 600,                    // Fixed width on desktop
+            // Adapt height to screen size
+            height: isSmallScreen
+                ? screenSize.height * 0.9  // 90% height on mobile
+                : MediaQuery.of(context).size.height * 0.8,  // 80% on desktop
+            // Center dialog on small screens
+            child: Center(
+              child: Material(
+                elevation: 8.0,
+                borderRadius: BorderRadius.circular(20),
+                child: NotificationListener<ScrollNotification>(
+                  // This prevents scroll events from propagating to the map
+                  onNotification: (notification) {
+                    return true; // Prevents the notification from propagating
+                  },
+                  child: UserProfileDialog(
+                    userId: userId,
+                    onMessageTap: () {
+                      // Close profile and start chat
+                      Navigator.of(context).pop();
+                      _startChatWithUser(userId);
+                    },
+                  ),
+                ),
               ),
             ),
           ),
         ],
       ),
-    );
+    ).then((_) {
+      // Re-enable map interactions when dialog is closed
+      js.context.callMethod('enableMapInteractions');
+    });
   }
 
-  // Method to show messages dialog
+  // 6.9: Messages dialog
   void _showMessagesDialog(BuildContext context) {
     // Close any open popups first
     js.context.callMethod('closeAllPopups');
+    
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 600;
     
     showDialog(
       context: context,
@@ -1574,20 +1708,25 @@ if (currentUserData != null &&
       builder: (context) => Stack(
         children: [
           Positioned(
-            bottom: 20,
-            right: 20,
-            width: 400,
-            height: 500,
+            // For mobile, take more screen space
+            bottom: isSmallScreen ? 10 : 20,
+            right: isSmallScreen ? 10 : 20,
+            // Set width based on screen size
+            width: isSmallScreen 
+                ? screenSize.width * 0.95  // 95% of screen width on mobile
+                : 400,                     // Fixed width on larger screens
+            // Set height based on screen size
+            height: isSmallScreen 
+                ? screenSize.height * 0.7  // 70% of screen height on mobile
+                : 500,                     // Fixed height on larger screens
             child: Material(
               elevation: 8.0,
               borderRadius: BorderRadius.circular(20),
               child: NotificationListener<ScrollNotification>(
                 // This prevents scroll events from propagating to the map
                 onNotification: (notification) {
-                  // Prevent scroll notifications from propagating to parent
-                  return true;
-                  },
-                // This prevents gesture events from propagating to the map
+                  return true; // Prevent scroll notifications from propagating
+                },
                 child: MessagesDialog(
                   onChatSelected: (userId, name, photo) {
                     // Close messages dialog and open chat
@@ -1603,7 +1742,7 @@ if (currentUserData != null &&
     );
   }
 
-  // Method to start a chat with a user
+  // 6.10: Start chat with user
   void _startChatWithUser(String userId, {String? name, String? photo}) {
     // Close any open popups first
     js.context.callMethod('closeAllPopups');
@@ -1629,31 +1768,43 @@ if (currentUserData != null &&
     final targetUserName = name ?? _usersData[userId]?['displayName'] ?? 'User';
     final targetUserPhoto = photo ?? _usersData[userId]?['photoURL'] ?? 'https://via.placeholder.com/40';
     
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 600;
+    
     showDialog(
       context: context,
       barrierColor: Colors.transparent,
       builder: (context) => Stack(
         children: [
           Positioned(
-            bottom: 20,
-            right: 20,
-            width: 400,
-            height: 500,
-            child: Material(
-              elevation: 8.0,
-              borderRadius: BorderRadius.circular(20),
-              child: NotificationListener<ScrollNotification>(
-
-                // This prevents scroll events from propagating to the map
-                onNotification: (notification) {
-                  // Prevent scroll notifications from propagating to parent
-    return true;
-  },
-                // This prevents gesture events from propagating to the map
-                child: ChatDialog(
-                  targetUserId: userId,
-                  targetUserName: targetUserName,
-                  targetUserPhoto: targetUserPhoto,
+            // Position at bottom with small margin
+            bottom: isSmallScreen ? 10 : 20,
+            // Center on mobile, right-aligned on desktop
+            right: isSmallScreen ? null : 20,
+            left: isSmallScreen ? 0 : null,
+            // Width based on screen size
+            width: isSmallScreen
+                ? screenSize.width * 0.95  // 95% width on mobile
+                : 400,                     // Fixed width on desktop
+            // Height based on screen size
+            height: isSmallScreen
+                ? screenSize.height * 0.8  // 80% height on mobile
+                : 500,                     // Fixed height on desktop
+            // Center on mobile
+            child: Center(
+              child: Material(
+                elevation: 8.0,
+                borderRadius: BorderRadius.circular(20),
+                child: NotificationListener<ScrollNotification>(
+                  // This prevents scroll events from propagating to the map
+                  onNotification: (notification) {
+                    return true; // Prevent scroll notifications from propagating
+                  },
+                  child: ChatDialog(
+                    targetUserId: userId,
+                    targetUserName: targetUserName,
+                    targetUserPhoto: targetUserPhoto,
+                  ),
                 ),
               ),
             ),
@@ -1663,6 +1814,7 @@ if (currentUserData != null &&
     );
   }
 
+  // 6.11: Upload profile picture
   void _uploadProfilePicture(BuildContext context, String slot) {
     final input = FileUploadInputElement()..accept = 'image/*';
     input.onChange.listen((e) async {
@@ -1769,6 +1921,7 @@ if (currentUserData != null &&
     input.click();
   }
 
+  // 4.2.16: Build method
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1780,7 +1933,6 @@ if (currentUserData != null &&
             fontSize: 24, // Increased from default
             fontWeight: FontWeight.bold,
             color: Colors.white, // Add this line to make the text white
-
           ),
         ),
         centerTitle: true,  // Add this line
@@ -1973,8 +2125,6 @@ if (currentUserData != null &&
         children: [
           const HtmlElementView(viewType: 'mapbox-gl-element'),
           
-          // Connection status indicator
-          
           // Add extra buttons in a row at the bottom
           Positioned(
             bottom: 20,
@@ -2053,7 +2203,11 @@ if (currentUserData != null &&
   }
 }
 
-// Class for groups dialog
+//==============================================================================
+// SECTION 7: GROUPS DIALOG
+//==============================================================================
+
+// 7.1: Groups Dialog Widget
 class GroupsDialog extends StatefulWidget {
   final VoidCallback onCreateGroup;
   final VoidCallback onSubscribe;
@@ -2068,21 +2222,26 @@ class GroupsDialog extends StatefulWidget {
     required this.onRadiusChanged,
   });
 
+  // 7.1.1: Create state method
   @override
   _GroupsDialogState createState() => _GroupsDialogState();
 }
 
+// 7.2: Groups Dialog State
 class _GroupsDialogState extends State<GroupsDialog> {
+  // 7.2.1: State variables
   bool isLoading = true;
   List<Map<String, dynamic>> nearbyGroups = [];
   List<Map<String, dynamic>> myGroups = [];
   
+  // 7.2.2: Init state method
   @override
   void initState() {
     super.initState();
     _loadGroups();
   }
   
+  // 7.2.3: Load groups method
   Future<void> _loadGroups() async {
     setState(() {
       isLoading = true;
@@ -2171,6 +2330,7 @@ class _GroupsDialogState extends State<GroupsDialog> {
     }
   }
   
+  // 7.2.4: Calculate distance method
   double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
     const double earthRadius = 3958.8; // Earth radius in miles
     
@@ -2187,18 +2347,20 @@ class _GroupsDialogState extends State<GroupsDialog> {
     return earthRadius * c; // Distance in miles
   }
   
+  // 7.2.5: Convert degrees to radians
   double _toRadians(double degrees) {
     return degrees * pi / 180;
   }
   
+  // 7.2.6: Build method
   @override
   Widget build(BuildContext context) {
     return NotificationListener<ScrollNotification>(
       // This prevents scroll events from propagating to the map
       onNotification: (notification) {
        // Prevent scroll notifications from propagating to parent
-    return true;
-  },
+        return true;
+      },
       // This prevents gesture events from propagating to the map
       child: Container(
         decoration: BoxDecoration(
@@ -2436,7 +2598,11 @@ class _GroupsDialogState extends State<GroupsDialog> {
   }
 }
 
-// Class for user profile dialog
+//==============================================================================
+// SECTION 8: USER PROFILE DIALOG
+//==============================================================================
+
+// 8.1: User Profile Dialog Widget
 class UserProfileDialog extends StatefulWidget {
   final String userId;
   final VoidCallback? onMessageTap;
@@ -2447,11 +2613,14 @@ class UserProfileDialog extends StatefulWidget {
     this.onMessageTap,
   });
 
+  // 8.1.1: Create state method
   @override
   _UserProfileDialogState createState() => _UserProfileDialogState();
 }
 
+// 8.2: User Profile Dialog State
 class _UserProfileDialogState extends State<UserProfileDialog> {
+  // 8.2.1: State variables
   Map<String, dynamic>? userData;
   UserProfileData profileData = UserProfileData();
   bool isLoading = true;
@@ -2466,12 +2635,14 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
   final sexualityController = TextEditingController();
   final descriptionController = TextEditingController();
   
+  // 8.2.2: Init state method
   @override
   void initState() {
     super.initState();
     _loadUserData();
   }
   
+  // 8.2.3: Dispose method
   @override
   void dispose() {
     ageController.dispose();
@@ -2483,6 +2654,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     super.dispose();
   }
   
+  // 8.2.4: Load user data method
   Future<void> _loadUserData() async {
     setState(() {
       isLoading = true;
@@ -2511,13 +2683,14 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
           
       if (profileDoc.exists) {
         profileData = UserProfileData.fromMap(profileDoc.data());
+
         
         // Update controllers
         ageController.text = profileData.age?.toString() ?? '';
         heightController.text = profileData.height?.toString() ?? '';
         weightController.text = profileData.weight?.toString() ?? '';
         bodyTypeController.text = profileData.bodyType ?? '';
-        sexualityController.text = profileData.sexuality ?? '';
+sexualityController.text = profileData.sexuality ?? '';
         descriptionController.text = profileData.description ?? '';
       }
       
@@ -2542,6 +2715,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     }
   }
   
+  // 8.2.5: Upload picture method
   void _uploadPicture(String slot) async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null || currentUser.uid != widget.userId) return;
@@ -2615,6 +2789,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     input.click();
   }
   
+  // 8.2.6: Save profile changes method
   Future<void> _saveProfileChanges() async {
     setState(() {
       isLoading = true;
@@ -2684,17 +2859,18 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
       }
     }
   }
-  
+
+  // 8.2.7: Build method
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 600;
+    
     return NotificationListener<ScrollNotification>(
-      // This prevents scroll events from propagating to the map
+      // Prevent scroll events from propagating to the map
       onNotification: (notification) {
-       // Prevent scroll notifications from propagating to parent
-    return true;
-  },
-      // This prevents gesture events from propagating to the map
-
+        return true;
+      },
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -2723,18 +2899,20 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
               ),
               child: Row(
                 children: [
-                  Text(
-                    isEditing ? "Edit Profile" : (userData?['displayName'] ?? 'User'),
-                    style: const TextStyle(
-                      fontSize: 24, 
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white
+                  Expanded(
+                    child: Text(
+                      isEditing ? "Edit Profile" : (userData?['displayName'] ?? 'User'),
+                      style: const TextStyle(
+                        fontSize: 20, 
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const Spacer(),
                   if (isCurrentUser && !isEditing)
                     IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.white, size: 28), // Increased size
+                      icon: const Icon(Icons.edit, color: Colors.white, size: 24),
                       tooltip: "Edit Profile",
                       onPressed: () {
                         setState(() {
@@ -2743,18 +2921,18 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
                       },
                     ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white, size: 28), // Increased size
+                    icon: const Icon(Icons.close, color: Colors.white, size: 24),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
               ),
             ),
             
-            // Main content
+            // Main content - make scrollable
             Expanded(
               child: SingleChildScrollView(
                 child: Padding(
-                  padding: const EdgeInsets.all(20.0),
+                  padding: const EdgeInsets.all(16.0),
                   child: isEditing 
                       ? _buildEditProfileView()
                       : _buildProfileView(),
@@ -2767,6 +2945,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     );
   }
   
+  // 8.2.8: Build profile view
   Widget _buildProfileView() {
     if (isLoading) {
       return const Center(
@@ -2805,200 +2984,174 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     final pic2 = profileData.additionalPictures?['2'] ?? 'https://via.placeholder.com/150?text=Add+Photo';
     final pic3 = profileData.additionalPictures?['3'] ?? 'https://via.placeholder.com/150?text=Add+Photo';
     
+    // Get screen size to determine layout
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 600;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Photos row
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Main profile picture
-            Column(
-              children: [
-                Container(
-                  width: 200,
-                  height: 200,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                    image: DecorationImage(
-                      image: NetworkImage(mainPhotoURL),
-                      fit: BoxFit.cover,
+        // Photos section - different layout based on screen size
+        isSmallScreen
+            // Vertical layout for mobile
+            ? Column(
+                children: [
+                  // Main profile picture centered on mobile
+                  Center(
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 180, // Slightly smaller on mobile
+                          height: 180,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                            image: DecorationImage(
+                              image: NetworkImage(mainPhotoURL),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        if (isCurrentUser) const SizedBox(height: 8),
+                        if (isCurrentUser)
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.edit),
+                            label: const Text("Change Picture"),
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              final _MapScreenState mapState = 
+                                  context.findAncestorStateOfType<_MapScreenState>()!;
+                              mapState._uploadProfilePicture(context, "main");
+                            },
+                          ),
+                      ],
                     ),
                   ),
-                ),
-                if (isCurrentUser) const SizedBox(height: 8),
-                if (isCurrentUser)
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.edit),
-                    label: const Text("Change Main Picture"),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      final _MapScreenState mapState = context.findAncestorStateOfType<_MapScreenState>()!;
-                      mapState._uploadProfilePicture(context, "main");
-                    },
+                  const SizedBox(height: 20),
+                  
+                  // Additional pictures section
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Additional Photos",
+                        style: TextStyle(
+                          fontSize: 18, 
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      // Use a wrap for flexible layout
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        alignment: WrapAlignment.spaceEvenly,
+                        children: [
+                          // Photo slot 1
+                          _buildPhotoSlot(pic1, '1'),
+                          // Photo slot 2
+                          _buildPhotoSlot(pic2, '2'),
+                          // Photo slot 3
+                          _buildPhotoSlot(pic3, '3'),
+                        ],
+                      ),
+                      if (isCurrentUser) const SizedBox(height: 8),
+                      if (isCurrentUser)
+                        const Center(
+                          child: Text(
+                            "Tap on a photo to add or change",
+                            style: TextStyle(fontStyle: FontStyle.italic),
+                          ),
+                        ),
+                    ],
                   ),
-              ],
-            ),
-            const SizedBox(width: 20),
-            // Additional pictures
-            Expanded(
-              child: Column(
+                ],
+              )
+            // Original horizontal layout for desktop
+            : Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Additional Photos",
-                    style: TextStyle(
-                      fontSize: 18, 
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  // Main profile picture
+                  Column(
                     children: [
-                      // Photo slot 1
-                      GestureDetector(
-                        onTap: isCurrentUser ? () => _uploadPicture('1') : null,
-                        child: Stack(
-                          children: [
-                            Container(
-                              width: 100,
-                              height: 100,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                                image: DecorationImage(
-                                  image: NetworkImage(pic1),
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
+                      Container(
+                        width: 200,
+                        height: 200,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
                             ),
-                            if (isCurrentUser && profileData.additionalPictures?['1'] == null)
-                              Positioned.fill(
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
-                                    color: Colors.black.withOpacity(0.5),
-                                  ),
-                                  child: const Icon(
-                                    Icons.add_photo_alternate,
-                                    color: Colors.white,
-                                    size: 40,
-                                  ),
-                                ),
-                              ),
                           ],
+                          image: DecorationImage(
+                            image: NetworkImage(mainPhotoURL),
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
-                      // Photo slot 2
-                      GestureDetector(
-                        onTap: isCurrentUser ? () => _uploadPicture('2') : null,
-                        child: Stack(
-                          children: [
-                            Container(
-                              width: 100,
-                              height: 100,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                                image: DecorationImage(
-                                  image: NetworkImage(pic2),
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                            ),
-                            if (isCurrentUser && profileData.additionalPictures?['2'] == null)
-                              Positioned.fill(
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
-                                    color: Colors.black.withOpacity(0.5),
-                                  ),
-                                  child: const Icon(
-                                    Icons.add_photo_alternate,
-                                    color: Colors.white,
-                                    size: 40,
-                                  ),
-                                ),
-                              ),
-                          ],
+                      if (isCurrentUser) const SizedBox(height: 8),
+                      if (isCurrentUser)
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.edit),
+                          label: const Text("Change Main Picture"),
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            final _MapScreenState mapState = 
+                                context.findAncestorStateOfType<_MapScreenState>()!;
+                            mapState._uploadProfilePicture(context, "main");
+                          },
                         ),
-                      ),
-                      // Photo slot 3
-                      GestureDetector(
-                        onTap: isCurrentUser ? () => _uploadPicture('3') : null,
-                        child: Stack(
-                          children: [
-                            Container(
-                              width: 100,
-                              height: 100,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                                image: DecorationImage(
-                                  image: NetworkImage(pic3),
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                            ),
-                            if (isCurrentUser && profileData.additionalPictures?['3'] == null)
-                              Positioned.fill(
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
-                                    color: Colors.black.withOpacity(0.5),
-                                  ),
-                                  child: const Icon(
-                                    Icons.add_photo_alternate,
-                                    color: Colors.white,
-                                    size: 40,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
-                  if (isCurrentUser) const SizedBox(height: 8),
-                  if (isCurrentUser)
-                    const Center(
-                      child: Text(
-                        "Tap on a slot to add or change a photo",
-                        style: TextStyle(fontStyle: FontStyle.italic),
-                      ),
+                  const SizedBox(width: 20),
+                  // Additional pictures
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Additional Photos",
+                          style: TextStyle(
+                            fontSize: 18, 
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            // Photo slot 1
+                            _buildPhotoSlot(pic1, '1'),
+                            // Photo slot 2
+                            _buildPhotoSlot(pic2, '2'),
+                            // Photo slot 3
+                            _buildPhotoSlot(pic3, '3'),
+                          ],
+                        ),
+                        if (isCurrentUser) const SizedBox(height: 8),
+                        if (isCurrentUser)
+                          const Center(
+                            child: Text(
+                              "Tap on a slot to add or change a photo",
+                              style: TextStyle(fontStyle: FontStyle.italic),
+                            ),
+                          ),
+                      ],
                     ),
+                  ),
                 ],
               ),
-            ),
-          ],
-        ),
         const SizedBox(height: 24),
         
         // Profile information section
@@ -3058,11 +3211,9 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
         
         const SizedBox(height: 24),
         
-        // User info and action buttons
-        Row(
-          children: [
-            Expanded(
-              child: Column(
+        // User info and action buttons - stacked vertically on mobile
+        isSmallScreen
+            ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
@@ -3074,29 +3225,111 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
                       "Last seen: ${DateTime.fromMillisecondsSinceEpoch(userData!['lastUpdated']).toLocal()}",
                       style: TextStyle(color: Colors.grey[600]),
                     ),
+                  const SizedBox(height: 16),
+                  // Message button full width on mobile
+                  if (!isCurrentUser && widget.onMessageTap != null)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.message),
+                        label: const Text("Message"),
+                        onPressed: widget.onMessageTap,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          textStyle: const TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    ),
+                ],
+              )
+            : Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "User ID: ${widget.userId}",
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                        if (userData!.containsKey('lastUpdated'))
+                          Text(
+                            "Last seen: ${DateTime.fromMillisecondsSinceEpoch(userData!['lastUpdated']).toLocal()}",
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                      ],
+                    ),
+                  ),
+                  
+                  // Message button (only show if viewing someone else's profile)
+                  if (!isCurrentUser && widget.onMessageTap != null)
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.message),
+                      label: const Text("Message"),
+                      onPressed: widget.onMessageTap,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        textStyle: const TextStyle(fontSize: 16),
+                      ),
+                    ),
                 ],
               ),
-            ),
-            
-            // Message button (only show if viewing someone else's profile)
-            if (!isCurrentUser && widget.onMessageTap != null)
-              ElevatedButton.icon(
-                icon: const Icon(Icons.message),
-                label: const Text("Message"),
-                onPressed: widget.onMessageTap,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  textStyle: const TextStyle(fontSize: 16),
-                ),
-              ),
-          ],
-        ),
       ],
     );
   }
 
+  // 8.2.9: Build photo slot
+  Widget _buildPhotoSlot(String photoUrl, String slot) {
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 600;
+    final photoSize = isSmallScreen ? 90.0 : 100.0;
+    
+    return GestureDetector(
+      onTap: isCurrentUser ? () => _uploadPicture(slot) : null,
+      child: Stack(
+        children: [
+          Container(
+            width: photoSize,
+            height: photoSize,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+              image: DecorationImage(
+                image: NetworkImage(photoUrl),
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+          if (isCurrentUser && profileData.additionalPictures?[slot] == null)
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.black.withOpacity(0.5),
+                ),
+                child: const Icon(
+                  Icons.add_photo_alternate,
+                  color: Colors.white,
+                  size: 40,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // 8.2.10: Build stats section
   Widget _buildStatsSection() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -3133,6 +3366,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     );
   }
   
+  // 8.2.11: Build stat row
   Widget _buildStatRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -3154,14 +3388,22 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     );
   }
   
+  // 8.2.12: Build edit profile view
   Widget _buildEditProfileView() {
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 600;
+    
     return Form(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             "Edit Your Profile Information",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue),
+            style: TextStyle(
+              fontSize: isSmallScreen ? 16 : 18, 
+              fontWeight: FontWeight.bold, 
+              color: Colors.blue
+            ),
           ),
           const SizedBox(height: 20),
           
@@ -3176,7 +3418,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: isSmallScreen ? 8 : 12),
           
           // Height field
           TextFormField(
@@ -3191,7 +3433,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
               FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*$')),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: isSmallScreen ? 8 : 12),
           
           // Weight field
           TextFormField(
@@ -3203,10 +3445,10 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
             ),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [
-          FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*$')),
+              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*$')),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: isSmallScreen ? 8 : 12),
           
           // Body type dropdown
           DropdownButtonFormField<String>(
@@ -3230,7 +3472,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
               }
             },
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: isSmallScreen ? 8 : 12),
           
           // Sexuality dropdown
           DropdownButtonFormField<String>(
@@ -3253,12 +3495,16 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
               }
             },
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: isSmallScreen ? 16 : 20),
           
           // Description field
-          const Text(
+          Text(
             "About Me",
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue),
+            style: TextStyle(
+              fontSize: isSmallScreen ? 14 : 16, 
+              fontWeight: FontWeight.bold, 
+              color: Colors.blue
+            ),
           ),
           const SizedBox(height: 8),
           TextFormField(
@@ -3271,67 +3517,107 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
             maxLines: 5,
           ),
           
-          const SizedBox(height: 24),
+          SizedBox(height: isSmallScreen ? 20 : 24),
           
-          // Action buttons
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: () {
-                  setState(() {
-                    isEditing = false;
-                    // Reset controllers to original values
-                    ageController.text = profileData.age?.toString() ?? '';
-                    heightController.text = profileData.height?.toString() ?? '';
-                    weightController.text = profileData.weight?.toString() ?? '';
-                    bodyTypeController.text = profileData.bodyType ?? '';
-                    sexualityController.text = profileData.sexuality ?? '';
-                    descriptionController.text = profileData.description ?? '';
-                  });
-                },
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 12),
-              ElevatedButton(
-                onPressed: _saveProfileChanges,
-                child: const Text('Save Changes'),
-              ),
-            ],
-          ),
+          // Action buttons - stack vertically on small screens
+          isSmallScreen
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ElevatedButton(
+                      onPressed: _saveProfileChanges,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text('Save Changes'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          isEditing = false;
+                          // Reset controllers to original values
+                          ageController.text = profileData.age?.toString() ?? '';
+                          heightController.text = profileData.height?.toString() ?? '';
+                          weightController.text = profileData.weight?.toString() ?? '';
+                          bodyTypeController.text = profileData.bodyType ?? '';
+                          sexualityController.text = profileData.sexuality ?? '';
+                          descriptionController.text = profileData.description ?? '';
+                        });
+                      },
+                      child: const Text('Cancel'),
+                    ),
+                  ],
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          isEditing = false;
+                          // Reset controllers to original values
+                          ageController.text = profileData.age?.toString() ?? '';
+                          heightController.text = profileData.height?.toString() ?? '';
+                          weightController.text = profileData.weight?.toString() ?? '';
+                          bodyTypeController.text = profileData.bodyType ?? '';
+                          sexualityController.text = profileData.sexuality ?? '';
+                          descriptionController.text = profileData.description ?? '';
+                        });
+                      },
+                      child: const Text('Cancel'),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton(
+                      onPressed: _saveProfileChanges,
+                      child: const Text('Save Changes'),
+                    ),
+                  ],
+                ),
         ],
       ),
     );
   }
 }
 
-// Messages dialog
+//==============================================================================
+// SECTION 9: MESSAGES DIALOG
+//==============================================================================
+
+// 9.1: Messages Dialog Widget
 class MessagesDialog extends StatefulWidget {
   final Function(String, String, String)? onChatSelected;
   
   const MessagesDialog({super.key, this.onChatSelected});
 
+  // 9.1.1: Create state method
   @override
   _MessagesDialogState createState() => _MessagesDialogState();
 }
 
+// 9.2: Messages Dialog State
 class _MessagesDialogState extends State<MessagesDialog> {
+  // 9.2.1: State variables
   bool isLoading = true;
   List<Map<String, dynamic>> chats = [];
   StreamSubscription? _chatsSubscription;
   
+  // 9.2.2: Init state method
   @override
   void initState() {
     super.initState();
     _loadChats();
   }
   
+  // 9.2.3: Dispose method
   @override
   void dispose() {
     _chatsSubscription?.cancel();
     super.dispose();
   }
   
+  // 9.2.4: Load chats method
   Future<void> _loadChats() async {
     setState(() {
       isLoading = true;
@@ -3445,6 +3731,32 @@ class _MessagesDialogState extends State<MessagesDialog> {
     }
   }
   
+  // 9.2.5: Format timestamp method
+  String _formatTimestamp(int timestamp) {
+    final now = DateTime.now();
+    final date = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    final difference = now.difference(date);
+    
+    if (difference.inDays > 7) {
+      // Format as date if more than a week ago
+      return '${date.day}/${date.month}/${date.year}';
+    } else if (difference.inDays > 0) {
+      // Format as day of week if within a week
+      final weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      return weekdayNames[date.weekday - 1];
+    } else if (difference.inHours > 0) {
+      // Format as hours ago if within a day
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      // Format as minutes ago if within an hour
+      return '${difference.inMinutes}m ago';
+    } else {
+      // Format as just now if within a minute
+      return 'Just now';
+    }
+  }
+  
+  // 9.2.6: Build method
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -3579,33 +3891,13 @@ class _MessagesDialogState extends State<MessagesDialog> {
       ),
     );
   }
-  
-  String _formatTimestamp(int timestamp) {
-    final now = DateTime.now();
-    final date = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    final difference = now.difference(date);
-    
-    if (difference.inDays > 7) {
-      // Format as date if more than a week ago
-      return '${date.day}/${date.month}/${date.year}';
-    } else if (difference.inDays > 0) {
-      // Format as day of week if within a week
-      final weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      return weekdayNames[date.weekday - 1];
-    } else if (difference.inHours > 0) {
-      // Format as hours ago if within a day
-      return '${difference.inHours}h ago';
-    } else if (difference.inMinutes > 0) {
-      // Format as minutes ago if within an hour
-      return '${difference.inMinutes}m ago';
-    } else {
-      // Format as just now if within a minute
-      return 'Just now';
-    }
-  }
 }
 
-// Chat dialog for direct messaging
+//==============================================================================
+// SECTION 10: CHAT DIALOG
+//==============================================================================
+
+// 10.1: Chat Dialog Widget
 class ChatDialog extends StatefulWidget {
   final String targetUserId;
   final String targetUserName;
@@ -3618,11 +3910,14 @@ class ChatDialog extends StatefulWidget {
     required this.targetUserPhoto
   });
 
+  // 10.1.1: Create state method
   @override
   _ChatDialogState createState() => _ChatDialogState();
 }
 
+// 10.2: Chat Dialog State
 class _ChatDialogState extends State<ChatDialog> {
+  // 10.2.1: State variables
   final messageController = TextEditingController();
   final scrollController = ScrollController();
   List<Map<String, dynamic>> chatMessages = [];
@@ -3630,12 +3925,14 @@ class _ChatDialogState extends State<ChatDialog> {
   StreamSubscription? _messagesSubscription;
   String chatId = '';
   
+  // 10.2.2: Init state method
   @override
   void initState() {
     super.initState();
     _setupChat();
   }
   
+  // 10.2.3: Dispose method
   @override
   void dispose() {
     _messagesSubscription?.cancel();
@@ -3644,6 +3941,7 @@ class _ChatDialogState extends State<ChatDialog> {
     super.dispose();
   }
   
+  // 10.2.4: Setup chat method
   void _setupChat() {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
@@ -3704,6 +4002,7 @@ class _ChatDialogState extends State<ChatDialog> {
       });
   }
   
+  // 10.2.5: Mark messages as read method
   void _markMessagesAsRead() async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
@@ -3726,6 +4025,7 @@ class _ChatDialogState extends State<ChatDialog> {
     }
   }
   
+  // 10.2.6: Send message method
   void _sendMessage() async {
     if (messageController.text.trim().isEmpty) return;
     
@@ -3776,6 +4076,15 @@ class _ChatDialogState extends State<ChatDialog> {
     }
   }
   
+  // 10.2.7: Format message time method
+  String _formatMessageTime(int timestamp) {
+    final date = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    final hours = date.hour.toString().padLeft(2, '0');
+    final minutes = date.minute.toString().padLeft(2, '0');
+    return '$hours:$minutes';
+  }
+  
+  // 10.2.8: Build method
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -3959,29 +4268,30 @@ class _ChatDialogState extends State<ChatDialog> {
       ),
     );
   }
-  
-  String _formatMessageTime(int timestamp) {
-    final date = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    final hours = date.hour.toString().padLeft(2, '0');
-    final minutes = date.minute.toString().padLeft(2, '0');
-    return '$hours:$minutes';
-  }
 }
 
-// Original SignInDialog class
+//==============================================================================
+// SECTION 11: AUTHENTICATION DIALOGS
+//==============================================================================
+
+// 11.1: Sign In Dialog Widget
 class SignInDialog extends StatefulWidget {
   const SignInDialog({super.key});
 
+  // 11.1.1: Create state method
   @override
   _SignInDialogState createState() => _SignInDialogState();
 }
 
+// 11.2: Sign In Dialog State
 class _SignInDialogState extends State<SignInDialog> {
+  // 11.2.1: State variables
   final _formKey = GlobalKey<FormState>();
   String _email = '';
   String _password = '';
   String _errorMessage = '';
 
+  // 11.2.2: Sign in method
   Future<void> _signIn() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
@@ -3999,14 +4309,15 @@ class _SignInDialogState extends State<SignInDialog> {
     }
   }
 
+  // 11.2.3: Build method
   @override
   Widget build(BuildContext context) {
     return NotificationListener<ScrollNotification>(
       // This prevents scroll events from propagating to the map
       onNotification: (notification) {
-           // Prevent scroll notifications from propagating to parent
-    return true;
-  },
+        // Prevent scroll notifications from propagating to parent
+        return true;
+      },
 
       // This prevents gesture events from propagating to the map
       child: Material(
@@ -4098,21 +4409,25 @@ class _SignInDialogState extends State<SignInDialog> {
   }
 }
 
-// Original SignUpDialog class
+// 11.3: Sign Up Dialog Widget
 class SignUpDialog extends StatefulWidget {
   const SignUpDialog({super.key});
 
+  // 11.3.1: Create state method
   @override
   _SignUpDialogState createState() => _SignUpDialogState();
 }
 
+// 11.4: Sign Up Dialog State
 class _SignUpDialogState extends State<SignUpDialog> {
+  // 11.4.1: State variables
   final _formKey = GlobalKey<FormState>();
   String _email = '';
   String _password = '';
   String _displayName = '';
   String _errorMessage = '';
 
+  // 11.4.2: Sign up method
   Future<void> _signUp() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
@@ -4162,14 +4477,15 @@ class _SignUpDialogState extends State<SignUpDialog> {
     }
   }
 
+  // 11.4.3: Build method
   @override
   Widget build(BuildContext context) {
     return NotificationListener<ScrollNotification>(
       // This prevents scroll events from propagating to the map
       onNotification: (notification) {
-    // Prevent scroll notifications from propagating to parent
-    return true;
-  },
+        // Prevent scroll notifications from propagating to parent
+        return true;
+      },
       // This prevents gesture events from propagating to the map
       child: Material(
         elevation: 4.0,
@@ -4255,4 +4571,3 @@ class _SignUpDialogState extends State<SignUpDialog> {
     );
   }
 }
-
