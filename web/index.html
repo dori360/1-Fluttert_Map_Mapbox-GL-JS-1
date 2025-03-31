@@ -99,6 +99,72 @@
         background-color: rgba(255,255,255,0.95) !important;
         backdrop-filter: blur(5px);
       }
+
+      /* Section 2.1: Age verification modal styles */
+      #age-verification-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(13, 27, 42, 0.9);
+        z-index: 10000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        display: none;
+      }
+
+      .modal-content {
+        background-color: white;
+        padding: 30px;
+        border-radius: 20px;
+        text-align: center;
+        max-width: 500px;
+        width: 90%;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+        font-family: sans-serif;
+      }
+
+      .modal-title {
+        color: #0D1B2A;
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 16px;
+      }
+
+      .modal-message {
+        margin-bottom: 24px;
+        font-size: 16px;
+        line-height: 1.5;
+        color: #333;
+      }
+
+      .modal-button {
+        background-color: #0066ff;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 12px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background-color 0.3s;
+      }
+
+      .modal-button:hover {
+        background-color: #0052cc;
+      }
+      
+      .modal-button-secondary {
+        background-color: #e0e0e0;
+        color: #333;
+        margin-left: 12px;
+      }
+      
+      .modal-button-secondary:hover {
+        background-color: #c0c0c0;
+      }
     </style>
     <script>
       /* Section 3: Main JavaScript Code */
@@ -305,60 +371,107 @@
       }
       window.closeAllPopups = closeAllPopups;
 
-      // 3.8: Map initialization function
-      function initializeMap() {
-        const tryInitialize = (retries) => {
-          const container = document.getElementById('mapbox-map');
-          if (container) {
-            console.log("Initializing map...");
-            const defaultLocation = [-122.4194, 37.7749];
-            map = new maplibregl.Map({
-              container: 'mapbox-map',
-              style: 'https://tiles.stadiamaps.com/styles/alidade_smooth_dark.json?api_key=your-stadia-api-key', // Replace with your actual API key
-              center: defaultLocation,
-              zoom: 12,
-            });
-            
-            map.addControl(new maplibregl.NavigationControl());
-            
-            const geolocateControl = new maplibregl.GeolocateControl({
-              positionOptions: { enableHighAccuracy: true },
-              trackUserLocation: true,
-              showUserHeading: true,
-            });
-            
-            map.addControl(geolocateControl);
-
-            // When user location is found through the geolocation control
-            geolocateControl.on('geolocate', (position) => {
-              console.log("Geolocated user position:", position.coords);
-              userLocation = [position.coords.longitude, position.coords.latitude];
-              
-              // This is key - expose the location to Flutter
-              window.userLocation = userLocation;
-              console.log("Set window.userLocation:", window.userLocation);
-              
-              updateUserMarker();
-            });
-
-            // When map is loaded, force a location update
-            map.on('load', () => {
-              console.log("Map loaded, forcing location update");
-              setTimeout(() => {
-                forceUpdateLocation();
-              }, 1000);
-            });
-            
-            console.log("Map initialization complete");
-          } else if (retries > 0) {
-            setTimeout(() => tryInitialize(retries - 1), 500);
-          } else {
-            console.error("Container 'mapbox-map' not found after retries");
-          }
-        };
+      // 3.8: Map initialization function (UPDATED to use custom tiles and remove attribution)(UPDATED with fallback style)
+function initializeMap() {
+  const tryInitialize = (retries) => {
+    const container = document.getElementById('mapbox-map');
+    if (container) {
+      console.log("Initializing map...");
+      const defaultLocation = [-122.4194, 37.7749];
+      
+      // Try to initialize with the custom style first
+      try {
+        map = new maplibregl.Map({
+          container: 'mapbox-map',
+          style: 'https://api.maptiler.com/maps/dataviz-dark/style.json?key=83SGEp18EIPVKCkod8ae', // Use a known working style as fallback
+          center: defaultLocation,
+          zoom: 12,
+          attributionControl: false // This removes the attribution/trademarks
+        });
         
-        tryInitialize(10);
+        // Add the navigation control
+        map.addControl(new maplibregl.NavigationControl());
+        
+        const geolocateControl = new maplibregl.GeolocateControl({
+          positionOptions: { enableHighAccuracy: true },
+          trackUserLocation: true,
+          showUserHeading: true,
+        });
+        
+        map.addControl(geolocateControl);
+
+        // When user location is found through the geolocation control
+        geolocateControl.on('geolocate', (position) => {
+          console.log("Geolocated user position:", position.coords);
+          userLocation = [position.coords.longitude, position.coords.latitude];
+          
+          // This is key - expose the location to Flutter
+          window.userLocation = userLocation;
+          console.log("Set window.userLocation:", window.userLocation);
+          
+          updateUserMarker();
+        });
+
+        // When map is loaded, force a location update
+        map.on('load', () => {
+          console.log("Map loaded, forcing location update");
+          setTimeout(() => {
+            forceUpdateLocation();
+          }, 1000);
+        });
+        
+        console.log("Map initialization complete");
+      } catch (error) {
+        console.error("Error initializing map:", error);
+        
+        // If custom style fails, try with a fallback style
+        try {
+          console.log("Trying with fallback style...");
+          map = new maplibregl.Map({
+            container: 'mapbox-map',
+            style: 'https://demotiles.maplibre.org/style.json', // Known working style
+            center: defaultLocation,
+            zoom: 12,
+            attributionControl: false
+          });
+          
+          map.addControl(new maplibregl.NavigationControl());
+          
+          const geolocateControl = new maplibregl.GeolocateControl({
+            positionOptions: { enableHighAccuracy: true },
+            trackUserLocation: true,
+            showUserHeading: true,
+          });
+          
+          map.addControl(geolocateControl);
+          
+          // Same event handlers as above
+          geolocateControl.on('geolocate', (position) => {
+            console.log("Geolocated user position:", position.coords);
+            userLocation = [position.coords.longitude, position.coords.latitude];
+            window.userLocation = userLocation;
+            updateUserMarker();
+          });
+          
+          map.on('load', () => {
+            console.log("Map loaded with fallback style, forcing location update");
+            setTimeout(() => {
+              forceUpdateLocation();
+            }, 1000);
+          });
+        } catch (fallbackError) {
+          console.error("Error initializing map with fallback style:", fallbackError);
+        }
       }
+    } else if (retries > 0) {
+      setTimeout(() => tryInitialize(retries - 1), 500);
+    } else {
+      console.error("Container 'mapbox-map' not found after retries");
+    }
+  };
+  
+  tryInitialize(10);
+}
 
       // 3.9: Map resizing handlers
       window.addEventListener('resize', () => {
@@ -397,10 +510,12 @@
         }
       }, { passive: false });
 
-      // 3.12: Initialize map on page load
+      // 3.12: Initialize map on page load (UPDATED to include age verification)
       window.addEventListener('load', () => {
         console.log("Window loaded, initializing map...");
         setTimeout(initializeMap, 500);
+        // Check age verification after a small delay to ensure modal is rendered
+        setTimeout(handleAgeVerification, 1000);
       });
       
       // 3.13: Prevent map interaction when dialogs are open
@@ -447,11 +562,56 @@
         };
       }
 
+      // 3.14: Age verification handler
+      function handleAgeVerification() {
+        const ageVerified = localStorage.getItem('ageVerified');
+        const modal = document.getElementById('age-verification-modal');
+        
+        if (!ageVerified) {
+          // Show the modal
+          modal.style.display = 'flex';
+          
+          // Disable map interactions while modal is open
+          if (window.disableMapInteractions) {
+            window.disableMapInteractions();
+          }
+          
+          // Add event listeners for the buttons
+          document.getElementById('confirm-age').addEventListener('click', function() {
+            localStorage.setItem('ageVerified', 'true');
+            modal.style.display = 'none';
+            
+            // Re-enable map interactions
+            if (window.enableMapInteractions) {
+              window.enableMapInteractions();
+            }
+          });
+          
+          document.getElementById('decline-age').addEventListener('click', function() {
+            // Redirect to a safe page or display another message
+            document.body.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100vh;"><h1>You must be 18 or older to access this site</h1></div>';
+          });
+        }
+      }
+
       // Call this after map initialization
       preventMapInteraction();
     </script>
   </head>
   <body>
+    <!-- Age verification modal -->
+    <div id="age-verification-modal">
+      <div class="modal-content">
+        <div class="modal-title">Age Verification</div>
+        <div class="modal-message">
+          This website is intended for users who are 18 years of age or older.
+          By entering, you confirm that you are at least 18 years old.
+        </div>
+        <button id="confirm-age" class="modal-button">Yes, I am 18 or older</button>
+        <button id="decline-age" class="modal-button modal-button-secondary">No, I am under 18</button>
+      </div>
+    </div>
+    
     <script src="main.dart.js"></script>
   </body>
 </html>

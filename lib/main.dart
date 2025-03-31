@@ -1,3 +1,4 @@
+
 import 'dart:html' hide VoidCallback; // Hide VoidCallback to avoid conflict
 import 'dart:ui_web' as ui;
 import 'dart:typed_data';
@@ -208,7 +209,7 @@ class MyApp extends StatelessWidget {
 }
 
 //==============================================================================
-// SECTION 4: MAP SCREEN
+// SECTION 4: MAP SCREEN 
 //==============================================================================
 
 // 4.1: Map Screen Widget
@@ -2156,45 +2157,46 @@ class _MapScreenState extends State<MapScreen> {
                 const SizedBox(height: 10),
                 
                 // Messages button with notification badge
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    FloatingActionButton(
-                      onPressed: () => _showMessagesDialog(context),
-                      backgroundColor: Colors.blue,
-                      elevation: 4,
-                      heroTag: 'messages',
-                      child: const Icon(Icons.message, size: 28),
-                    ),
-                    if (_hasUnreadMessages)
-                      Positioned(
-                        top: -5,
-                        right: -5,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 22,
-                            minHeight: 22,
-                          ),
-                          child: Text(
-                            _unreadCount > 99 ? '99+' : _unreadCount.toString(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ],
+// Messages button with notification badge
+Stack(
+  clipBehavior: Clip.none,
+  children: [
+    FloatingActionButton(
+      onPressed: () => _showMessagesDialog(context),
+      backgroundColor: Colors.purple,  // Changed to match other buttons
+      elevation: 4,
+      mini: true,  // Made mini to match other buttons
+      heroTag: 'messages',
+      child: const Icon(Icons.message, size: 24),  // Reduced size to match others
+    ),
+    if (_hasUnreadMessages)
+      Positioned(
+        top: -5,
+        right: -5,
+        child: Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: Colors.red,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+          ),
+          constraints: const BoxConstraints(
+            minWidth: 22,
+            minHeight: 22,
+          ),
+          child: Text(
+            _unreadCount > 99 ? '99+' : _unreadCount.toString(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+  ],
+),              ],
             ),
           ),
         ],
@@ -4571,3 +4573,4 @@ class _SignUpDialogState extends State<SignUpDialog> {
     );
   }
 }
+
