@@ -1,0 +1,40 @@
+2025/03/31-10:41:49.740 8207 Creating DB /private/var/folders/63/mq1nxf5j0tg3z_2c2h6scnpc0000gn/T/flutter_tools.XW6fid/flutter_tools_chrome_device.QieBmy/Default/IndexedDB/http_0.0.0.0_8000.indexeddb.leveldb since it was missing.
+2025/03/31-10:41:49.744 8207 Reusing MANIFEST /private/var/folders/63/mq1nxf5j0tg3z_2c2h6scnpc0000gn/T/flutter_tools.XW6fid/flutter_tools_chrome_device.QieBmy/Default/IndexedDB/http_0.0.0.0_8000.indexeddb.leveldb/MANIFEST-000001
+2025/03/31-10:41:49.752 b603 Manual compaction at level-0 from '\x00\x01\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x02\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/03/31-11:15:47.159 b603 Manual compaction at level-0 from '\x00\x05\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x06\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/03/31-11:16:04.905 f803 Level-0 table #5: started
+2025/03/31-11:16:04.915 f803 Level-0 table #5: 71456 bytes OK
+2025/03/31-11:16:04.919 f803 Delete type=0 #3
+2025/03/31-11:16:04.924 b603 Manual compaction at level-0 from '\x00\x06\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x07\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/03/31-11:16:29.986 f803 Level-0 table #7: started
+2025/03/31-11:16:30.003 f803 Level-0 table #7: 26077 bytes OK
+2025/03/31-11:16:30.006 f803 Delete type=0 #4
+2025/03/31-11:16:30.008 8207 Manual compaction at level-0 from '\x00\x07\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x08\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/03/31-11:16:30.708 a303 Compacting 1@1 + 1@2 files
+2025/03/31-11:16:30.711 a303 Generated table #8@1: 328 keys, 15256 bytes
+2025/03/31-11:16:30.711 a303 Compacted 1@1 + 1@2 files => 15256 bytes
+2025/03/31-11:16:30.713 a303 compacted to: files[ 0 0 1 0 0 0 0 ]
+2025/03/31-11:16:30.713 a303 Delete type=2 #7
+2025/03/31-11:16:30.713 a303 Delete type=2 #5
+2025/03/31-11:16:48.639 b603 Level-0 table #10: started
+2025/03/31-11:16:48.644 b603 Level-0 table #10: 24110 bytes OK
+2025/03/31-11:16:48.648 b603 Delete type=0 #6
+2025/03/31-11:16:48.648 8207 Manual compaction at level-0 from '\x00\x08\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x09\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/03/31-11:16:49.469 a303 Compacting 1@1 + 1@2 files
+2025/03/31-11:16:49.476 a303 Generated table #11@1: 331 keys, 15339 bytes
+2025/03/31-11:16:49.476 a303 Compacted 1@1 + 1@2 files => 15339 bytes
+2025/03/31-11:16:49.477 a303 compacted to: files[ 0 0 1 0 0 0 0 ]
+2025/03/31-11:16:49.480 a303 Delete type=2 #10
+2025/03/31-11:16:49.480 a303 Delete type=2 #8
+2025/03/31-11:37:26.727 a303 Level-0 table #13: started
+2025/03/31-11:37:26.734 a303 Level-0 table #13: 187683 bytes OK
+2025/03/31-11:37:26.741 a303 Delete type=0 #9
+2025/03/31-11:37:26.743 a303 Manual compaction at level-0 from (begin) .. (end); will stop at (end)
+2025/03/31-11:37:26.744 a303 Manual compaction at level-1 from (begin) .. (end); will stop at '\x00\x04\x0f \x04\x04\x01\x0e\x00u\x00s\x00e\x00r\x00_\x00l\x00o\x00c\x00a\x00t\x00i\x00o\x00n\x00s\x04\x02\x03\x00\x00@G\xb7\xfa\xd9A\x03\x00\x00\x00`}\xc1\xc0A\x04\x00\x01\x1c\x00b\x003\x00C\x00L\x00I\x00G\x00e\x005\x00n\x00H\x00c\x00s\x006\x00E\x007\x00Y\x002\x000\x00L\x00C\x005\x00Z\x00d\x00w\x00O\x00k\x00H\x002\x00\x04\x04\x04\x00\x01\x0e\x00u\x00s\x00e\x00r\x00_\x00l\x00o\x00c\x00a\x00t\x00i\x00o\x00n\x00s\x04\x02\x03\x00\x00@G\xb7\xfa\xd9A\x03\x00\x00\x00`}\xc1\xc0A\x01\x1c\x00b\x003\x00C\x00L\x00I\x00G\x00e\x005\x00n\x00H\x00c\x00s\x006\x00E\x007\x00Y\x002\x000\x00L\x00C\x005\x00Z\x00d\x00w\x00O\x00k\x00H\x002' @ 6013 : 1
+2025/03/31-11:37:26.744 a303 Compacting 1@1 + 1@2 files
+2025/03/31-11:37:26.747 a303 Generated table #14@1: 332 keys, 15788 bytes
+2025/03/31-11:37:26.747 a303 Compacted 1@1 + 1@2 files => 15788 bytes
+2025/03/31-11:37:26.748 a303 compacted to: files[ 0 0 1 0 0 0 0 ]
+2025/03/31-11:37:26.749 a303 Delete type=2 #13
+2025/03/31-11:37:26.749 a303 Delete type=2 #11
+2025/03/31-11:37:26.754 a303 Manual compaction at level-1 from '\x00\x04\x0f \x04\x04\x01\x0e\x00u\x00s\x00e\x00r\x00_\x00l\x00o\x00c\x00a\x00t\x00i\x00o\x00n\x00s\x04\x02\x03\x00\x00@G\xb7\xfa\xd9A\x03\x00\x00\x00`}\xc1\xc0A\x04\x00\x01\x1c\x00b\x003\x00C\x00L\x00I\x00G\x00e\x005\x00n\x00H\x00c\x00s\x006\x00E\x007\x00Y\x002\x000\x00L\x00C\x005\x00Z\x00d\x00w\x00O\x00k\x00H\x002\x00\x04\x04\x04\x00\x01\x0e\x00u\x00s\x00e\x00r\x00_\x00l\x00o\x00c\x00a\x00t\x00i\x00o\x00n\x00s\x04\x02\x03\x00\x00@G\xb7\xfa\xd9A\x03\x00\x00\x00`}\xc1\xc0A\x01\x1c\x00b\x003\x00C\x00L\x00I\x00G\x00e\x005\x00n\x00H\x00c\x00s\x006\x00E\x007\x00Y\x002\x000\x00L\x00C\x005\x00Z\x00d\x00w\x00O\x00k\x00H\x002' @ 6013 : 1 .. (end); will stop at (end)

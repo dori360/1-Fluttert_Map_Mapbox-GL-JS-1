@@ -13,6 +13,14 @@
         padding: 0;
         height: 100%;
       }
+      /* Add this style for the map container */
+#mapbox-map {
+  width: 100%;
+  height: 100%;
+  border: 2px solid #808080; /* Grey border around the map */
+  box-sizing: border-box; /* Ensures border is included in the element's dimensions */
+}
+
       
       .user-marker {
         width: 40px;
@@ -253,109 +261,122 @@
       }
 
       // 3.6: Other users markers update function
-      function updateOtherUsersMarkers(usersData) {
-        console.log("Updating other users markers:", usersData);
-        
-        if (!map || !currentUserId) {
-          console.warn("Map or current user ID not initialized yet");
-          return;
-        }
-        
-        // Clear old markers
-        for (const uid in otherUsersMarkers) {
-          otherUsersMarkers[uid].remove();
-          
-          // Also remove any existing stat popups
-          const existingPopup = document.getElementById(`stats-popup-${uid}`);
-          if (existingPopup) {
-            existingPopup.remove();
-          }
-        }
-        otherUsersMarkers = {};
-        
-        // Skip if empty data
-        if (!usersData || Object.keys(usersData).length === 0) {
-          console.log("No other users to display");
-          return;
-        }
-        
-        // Add markers for each user
-        for (const uid in usersData) {
-          try {
-            // Skip if this is the current user
-            if (uid === currentUserId) continue;
-            
-            const userData = usersData[uid];
-            
-            // Skip if no valid location data
-            if (!userData || !userData.longitude || !userData.latitude) {
-              console.warn(`Invalid location data for user ${uid}`);
-              continue;
-            }
-            
-            // Create marker element
-            const el = document.createElement('div');
-            el.className = 'user-marker other-user-marker';
-            el.id = `marker-${uid}`;
-            el.style.backgroundImage = userData.photoURL ? 
-              `url(${userData.photoURL})` : 
-              `url(https://via.placeholder.com/40)`;
-            
-            // Add click event to show profile
-            el.addEventListener('click', () => {
-              console.log(`User marker clicked: ${uid}`);
-              // Close any open popups first to avoid accessibility issues
-              closeAllPopups();
-              // Call the Dart function to show user profile
-              if (window.showUserProfile) {
-                window.showUserProfile(uid);
-              }
-            });
-            
-            // Create the stats for hover popup
-            let popupHTML = `<strong>${userData.displayName || 'User'}</strong>`;
-            
-            // Add distance if available
-            if (userData.distance) {
-              popupHTML += `<div>${userData.distance} miles away</div>`;
-            }
-            
-            // Add additional user details if available
-            if (userData.age) popupHTML += `<div>Age: ${userData.age}</div>`;
-            if (userData.bodyType) popupHTML += `<div>Body Type: ${userData.bodyType}</div>`;
-            if (userData.sexuality) popupHTML += `<div>Sexuality: ${userData.sexuality}</div>`;
-            
-            // Create popup with user info
-            const popup = new maplibregl.Popup({ 
-              offset: 25,
-              closeButton: false,
-              closeOnClick: false
-            }).setHTML(popupHTML);
-            
-            // Create the marker
-            const marker = new maplibregl.Marker({ element: el })
-              .setLngLat([userData.longitude, userData.latitude])
-              .setPopup(popup)
-              .addTo(map);
-            
-            // Show popup on hover
-            el.addEventListener('mouseenter', () => {
-              marker.getPopup().addTo(map);
-            });
-            
-            el.addEventListener('mouseleave', () => {
-              marker.getPopup().remove();
-            });
-            
-            otherUsersMarkers[uid] = marker;
-          } catch (err) {
-            console.error(`Error creating marker for user ${uid}:`, err);
-          }
-        }
-        
-        console.log(`Added ${Object.keys(otherUsersMarkers).length} user markers to map`);
+
+let pendingMarkerUpdates = null;
+
+function updateOtherUsersMarkers(usersData) {
+  console.log("Updating other users markers:", usersData);
+  
+  if (!map || !currentUserId) {
+    console.warn("Map or current user ID not initialized yet - queuing update");
+    pendingMarkerUpdates = usersData; // Store the data for later
+    return;
+  }
+  
+  // Clear old markers
+  for (const uid in otherUsersMarkers) {
+    otherUsersMarkers[uid].remove();
+    
+    // Also remove any existing stat popups
+    const existingPopup = document.getElementById(`stats-popup-${uid}`);
+    if (existingPopup) {
+      existingPopup.remove();
+    }
+  }
+  otherUsersMarkers = {};
+  
+  // Skip if empty data
+  if (!usersData || Object.keys(usersData).length === 0) {
+    console.log("No other users to display");
+    return;
+  }
+  
+  // Add markers for each user
+  for (const uid in usersData) {
+    try {
+      // Skip if this is the current user
+      if (uid === currentUserId) continue;
+      
+      const userData = usersData[uid];
+      
+      // Skip if no valid location data
+      if (!userData || !userData.longitude || !userData.latitude) {
+        console.warn(`Invalid location data for user ${uid}`);
+        continue;
       }
-      window.updateOtherUsersMarkers = updateOtherUsersMarkers;
+      
+      // Create marker element
+      const el = document.createElement('div');
+      el.className = 'user-marker other-user-marker';
+      el.id = `marker-${uid}`;
+      el.style.backgroundImage = userData.photoURL ? 
+        `url(${userData.photoURL})` : 
+        `url(https://via.placeholder.com/40)`;
+      
+      // Add click event to show profile
+      el.addEventListener('click', () => {
+        console.log(`User marker clicked: ${uid}`);
+        // Close any open popups first to avoid accessibility issues
+        closeAllPopups();
+        // Call the Dart function to show user profile
+        if (window.showUserProfile) {
+          window.showUserProfile(uid);
+        }
+      });
+      
+      // Create the stats for hover popup
+      let popupHTML = `<strong>${userData.displayName || 'User'}</strong>`;
+      
+      // Add distance if available
+      if (userData.distance) {
+        popupHTML += `<div>${userData.distance} miles away</div>`;
+      }
+      
+      // Add additional user details if available
+      if (userData.age) popupHTML += `<div>Age: ${userData.age}</div>`;
+      if (userData.bodyType) popupHTML += `<div>Body Type: ${userData.bodyType}</div>`;
+      if (userData.sexuality) popupHTML += `<div>Sexuality: ${userData.sexuality}</div>`;
+      
+      // Create popup with user info
+      const popup = new maplibregl.Popup({ 
+        offset: 25,
+        closeButton: false,
+        closeOnClick: false
+      }).setHTML(popupHTML);
+      
+      // Create the marker
+      const marker = new maplibregl.Marker({ element: el })
+        .setLngLat([userData.longitude, userData.latitude])
+        .setPopup(popup)
+        .addTo(map);
+      
+      // Show popup on hover
+      el.addEventListener('mouseenter', () => {
+        marker.getPopup().addTo(map);
+      });
+      
+      el.addEventListener('mouseleave', () => {
+        marker.getPopup().remove();
+      });
+      
+      otherUsersMarkers[uid] = marker;
+    } catch (err) {
+      console.error(`Error creating marker for user ${uid}:`, err);
+    }
+  }
+  
+  console.log(`Added ${Object.keys(otherUsersMarkers).length} user markers to map`);
+}
+window.updateOtherUsersMarkers = updateOtherUsersMarkers;
+
+// Additional functions to handle initialization timing
+function checkPendingUpdates() {
+  if (map && currentUserId && pendingMarkerUpdates) {
+    console.log("Processing pending marker updates now that initialization is complete");
+    updateOtherUsersMarkers(pendingMarkerUpdates);
+    pendingMarkerUpdates = null;
+  }
+}
       
       // 3.7: Popup management function
       function closeAllPopups() {

@@ -44,5 +44,9 @@ Everything is the same from # V1.0.8, rules are for testing right now.
 Will change map from mapbox to map libre with a custom style. changed it to Stadia Maps Dark Style. but working on a custom style for now. 
 
 # V1.1.1
+Made the  all buttons on bottom left the same size. 
 
-Made the  all buttons on bottom left the same size 
+# V1.1.2
+New circular style for the buttons and line around the map area. 
+
+

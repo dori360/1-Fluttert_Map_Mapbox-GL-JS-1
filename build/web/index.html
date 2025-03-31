@@ -2,10 +2,12 @@
 <html>
   <head>
     <meta charset="UTF-8">
-    <title>My Flutter Mapbox App</title>
-    <link href="https://api.mapbox.com/mapbox-gl-js/v2.7.0/mapbox-gl.css" rel="stylesheet" />
-    <script src="https://api.mapbox.com/mapbox-gl-js/v2.7.0/mapbox-gl.js"></script>
+    <title>My Flutter MapLibre App</title>
+    <!-- Section 1: Map Library Imports -->
+    <link href="https://cdn.jsdelivr.net/npm/maplibre-gl@2.4.0/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@2.4.0/dist/maplibre-gl.js"></script>
     <style>
+      /* Section 2: CSS Styles */
       html, body {
         margin: 0;
         padding: 0;
@@ -36,7 +38,7 @@
         border: 3px solid #ff6600;
       }
       
-      .mapboxgl-popup-content {
+      .maplibregl-popup-content {
         padding: 10px;
         text-align: center;
         border-radius: 12px;
@@ -79,49 +81,113 @@
       }
       
       /* Improved UI controls */
-      .mapboxgl-ctrl-group {
+      .maplibregl-ctrl-group {
         box-shadow: 0 4px 10px rgba(0,0,0,0.2) !important;
         border-radius: 12px !important;
       }
       
-      .mapboxgl-ctrl button {
+      .maplibregl-ctrl button {
         width: 40px !important; 
         height: 40px !important;
       }
       
-      .mapboxgl-popup {
+      .maplibregl-popup {
         max-width: 280px !important;
       }
       
-      .mapboxgl-popup-content {
+      .maplibregl-popup-content {
         background-color: rgba(255,255,255,0.95) !important;
         backdrop-filter: blur(5px);
       }
+
+      /* Section 2.1: Age verification modal styles */
+      #age-verification-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(13, 27, 42, 0.9);
+        z-index: 10000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        display: none;
+      }
+
+      .modal-content {
+        background-color: white;
+        padding: 30px;
+        border-radius: 20px;
+        text-align: center;
+        max-width: 500px;
+        width: 90%;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+        font-family: sans-serif;
+      }
+
+      .modal-title {
+        color: #0D1B2A;
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 16px;
+      }
+
+      .modal-message {
+        margin-bottom: 24px;
+        font-size: 16px;
+        line-height: 1.5;
+        color: #333;
+      }
+
+      .modal-button {
+        background-color: #0066ff;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 12px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background-color 0.3s;
+      }
+
+      .modal-button:hover {
+        background-color: #0052cc;
+      }
+      
+      .modal-button-secondary {
+        background-color: #e0e0e0;
+        color: #333;
+        margin-left: 12px;
+      }
+      
+      .modal-button-secondary:hover {
+        background-color: #c0c0c0;
+      }
     </style>
     <script>
-      mapboxgl.accessToken = 'pk.eyJ1IjoiZGFtb3NzIiwiYSI6ImNtNnRyZzk5MTA2NzkyaXExN2EyNTR1dWsifQ.UdaXenvYULYz6lkQbLU1hg';
-
+      /* Section 3: Main JavaScript Code */
+      // 3.1: Global variables
       let map;
       let userLocation = null;
       let profilePictureUrl = null;
       let userMarker = null;
       let otherUsersMarkers = {};
-      
-      // Store the current user ID
       let currentUserId = null;
       
+      // 3.2: User ID management
       function setCurrentUserId(uid) {
         currentUserId = uid;
         console.log("Setting current user ID:", uid);
       }
       window.setCurrentUserId = setCurrentUserId;
 
-      // Enhanced setProfilePicture function to update markers immediately
+      // 3.3: Profile picture management
       function setProfilePicture(url) {
         profilePictureUrl = url;
         console.log("Setting profile picture:", url);
         
-        // Update user's own marker immediately if it exists
         if (userMarker) {
           const el = userMarker.getElement();
           el.style.backgroundImage = `url(${url})`;
@@ -130,8 +196,8 @@
       }
       window.setProfilePicture = setProfilePicture;
 
+      // 3.4: Location update function
       function forceUpdateLocation() {
-        // Directly try to get the user's location
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
             (position) => {
@@ -139,11 +205,9 @@
               userLocation = [position.coords.longitude, position.coords.latitude];
               updateUserMarker();
               
-              // This is critical - making user location accessible to Flutter
               window.userLocation = userLocation;
               console.log("Updated window.userLocation:", window.userLocation);
               
-              // If map exists, fly to the location
               if (map) {
                 map.flyTo({
                   center: userLocation,
@@ -167,6 +231,7 @@
       }
       window.forceUpdateLocation = forceUpdateLocation;
 
+      // 3.5: User marker update function
       function updateUserMarker() {
         if (!map) return;
         
@@ -180,186 +245,248 @@
               `url(${profilePictureUrl})` : 
               `url(https://via.placeholder.com/40)`;
             
-            userMarker = new mapboxgl.Marker({ element: el })
+            userMarker = new maplibregl.Marker({ element: el })
               .setLngLat(userLocation)
               .addTo(map);
           }
         }
       }
 
-      function updateOtherUsersMarkers(usersData) {
-        console.log("Updating other users markers:", usersData);
-        
-        if (!map || !currentUserId) {
-          console.warn("Map or current user ID not initialized yet");
-          return;
-        }
-        
-        // Clear old markers
-        for (const uid in otherUsersMarkers) {
-          otherUsersMarkers[uid].remove();
-          
-          // Also remove any existing stat popups
-          const existingPopup = document.getElementById(`stats-popup-${uid}`);
-          if (existingPopup) {
-            existingPopup.remove();
-          }
-        }
-        otherUsersMarkers = {};
-        
-        // Skip if empty data
-        if (!usersData || Object.keys(usersData).length === 0) {
-          console.log("No other users to display");
-          return;
-        }
-        
-        // Add markers for each user
-        for (const uid in usersData) {
-          try {
-            // Skip if this is the current user
-            if (uid === currentUserId) continue;
-            
-            const userData = usersData[uid];
-            
-            // Skip if no valid location data
-            if (!userData || !userData.longitude || !userData.latitude) {
-              console.warn(`Invalid location data for user ${uid}`);
-              continue;
-            }
-            
-            // Create marker element
-            const el = document.createElement('div');
-            el.className = 'user-marker other-user-marker';
-            el.id = `marker-${uid}`;
-            el.style.backgroundImage = userData.photoURL ? 
-              `url(${userData.photoURL})` : 
-              `url(https://via.placeholder.com/40)`;
-            
-            // Add click event to show profile
-            el.addEventListener('click', () => {
-              console.log(`User marker clicked: ${uid}`);
-              // Close any open popups first to avoid accessibility issues
-              closeAllPopups();
-              // Call the Dart function to show user profile
-              if (window.showUserProfile) {
-                window.showUserProfile(uid);
-              }
-            });
-            
-            // Create the stats for hover popup
-            let popupHTML = `<strong>${userData.displayName || 'User'}</strong>`;
-            
-            // Add distance if available
-            if (userData.distance) {
-              popupHTML += `<div>${userData.distance} miles away</div>`;
-            }
-            
-            // Add additional user details if available
-            if (userData.age) popupHTML += `<div>Age: ${userData.age}</div>`;
-            if (userData.bodyType) popupHTML += `<div>Body Type: ${userData.bodyType}</div>`;
-            if (userData.sexuality) popupHTML += `<div>Sexuality: ${userData.sexuality}</div>`;
-            
-            // Create popup with user info
-            const popup = new mapboxgl.Popup({ 
-              offset: 25,
-              closeButton: false,
-              closeOnClick: false
-            }).setHTML(popupHTML);
-            
-            // Create the marker
-            const marker = new mapboxgl.Marker({ element: el })
-              .setLngLat([userData.longitude, userData.latitude])
-              .setPopup(popup)
-              .addTo(map);
-            
-            // Show popup on hover
-            el.addEventListener('mouseenter', () => {
-              marker.getPopup().addTo(map);
-            });
-            
-            el.addEventListener('mouseleave', () => {
-              marker.getPopup().remove();
-            });
-            
-            otherUsersMarkers[uid] = marker;
-          } catch (err) {
-            console.error(`Error creating marker for user ${uid}:`, err);
-          }
-        }
-        
-        console.log(`Added ${Object.keys(otherUsersMarkers).length} user markers to map`);
-      }
-      window.updateOtherUsersMarkers = updateOtherUsersMarkers;
+      // 3.6: Other users markers update function
+
+let pendingMarkerUpdates = null;
+
+function updateOtherUsersMarkers(usersData) {
+  console.log("Updating other users markers:", usersData);
+  
+  if (!map || !currentUserId) {
+    console.warn("Map or current user ID not initialized yet - queuing update");
+    pendingMarkerUpdates = usersData; // Store the data for later
+    return;
+  }
+  
+  // Clear old markers
+  for (const uid in otherUsersMarkers) {
+    otherUsersMarkers[uid].remove();
+    
+    // Also remove any existing stat popups
+    const existingPopup = document.getElementById(`stats-popup-${uid}`);
+    if (existingPopup) {
+      existingPopup.remove();
+    }
+  }
+  otherUsersMarkers = {};
+  
+  // Skip if empty data
+  if (!usersData || Object.keys(usersData).length === 0) {
+    console.log("No other users to display");
+    return;
+  }
+  
+  // Add markers for each user
+  for (const uid in usersData) {
+    try {
+      // Skip if this is the current user
+      if (uid === currentUserId) continue;
       
-      // Add this function to close all popups
+      const userData = usersData[uid];
+      
+      // Skip if no valid location data
+      if (!userData || !userData.longitude || !userData.latitude) {
+        console.warn(`Invalid location data for user ${uid}`);
+        continue;
+      }
+      
+      // Create marker element
+      const el = document.createElement('div');
+      el.className = 'user-marker other-user-marker';
+      el.id = `marker-${uid}`;
+      el.style.backgroundImage = userData.photoURL ? 
+        `url(${userData.photoURL})` : 
+        `url(https://via.placeholder.com/40)`;
+      
+      // Add click event to show profile
+      el.addEventListener('click', () => {
+        console.log(`User marker clicked: ${uid}`);
+        // Close any open popups first to avoid accessibility issues
+        closeAllPopups();
+        // Call the Dart function to show user profile
+        if (window.showUserProfile) {
+          window.showUserProfile(uid);
+        }
+      });
+      
+      // Create the stats for hover popup
+      let popupHTML = `<strong>${userData.displayName || 'User'}</strong>`;
+      
+      // Add distance if available
+      if (userData.distance) {
+        popupHTML += `<div>${userData.distance} miles away</div>`;
+      }
+      
+      // Add additional user details if available
+      if (userData.age) popupHTML += `<div>Age: ${userData.age}</div>`;
+      if (userData.bodyType) popupHTML += `<div>Body Type: ${userData.bodyType}</div>`;
+      if (userData.sexuality) popupHTML += `<div>Sexuality: ${userData.sexuality}</div>`;
+      
+      // Create popup with user info
+      const popup = new maplibregl.Popup({ 
+        offset: 25,
+        closeButton: false,
+        closeOnClick: false
+      }).setHTML(popupHTML);
+      
+      // Create the marker
+      const marker = new maplibregl.Marker({ element: el })
+        .setLngLat([userData.longitude, userData.latitude])
+        .setPopup(popup)
+        .addTo(map);
+      
+      // Show popup on hover
+      el.addEventListener('mouseenter', () => {
+        marker.getPopup().addTo(map);
+      });
+      
+      el.addEventListener('mouseleave', () => {
+        marker.getPopup().remove();
+      });
+      
+      otherUsersMarkers[uid] = marker;
+    } catch (err) {
+      console.error(`Error creating marker for user ${uid}:`, err);
+    }
+  }
+  
+  console.log(`Added ${Object.keys(otherUsersMarkers).length} user markers to map`);
+}
+window.updateOtherUsersMarkers = updateOtherUsersMarkers;
+
+// Additional functions to handle initialization timing
+function checkPendingUpdates() {
+  if (map && currentUserId && pendingMarkerUpdates) {
+    console.log("Processing pending marker updates now that initialization is complete");
+    updateOtherUsersMarkers(pendingMarkerUpdates);
+    pendingMarkerUpdates = null;
+  }
+}
+      
+      // 3.7: Popup management function
       function closeAllPopups() {
         // Close any open popups that might have accessibility issues
-        const closeButtons = document.querySelectorAll('.mapboxgl-popup-close-button');
+        const closeButtons = document.querySelectorAll('.maplibregl-popup-close-button');
         
         // Click each close button to properly close the popups
         closeButtons.forEach(button => {
           button.click();
         });
         
-        console.log("Closed all mapbox popups");
+        console.log("Closed all maplibre popups");
       }
       window.closeAllPopups = closeAllPopups;
 
-      function initializeMap() {
-        const tryInitialize = (retries) => {
-          const container = document.getElementById('mapbox-map');
-          if (container) {
-            console.log("Initializing map...");
-            const defaultLocation = [-122.4194, 37.7749];
-            map = new mapboxgl.Map({
-              container: 'mapbox-map',
-              style: 'mapbox://styles/damoss/clnz0vs58009p01qs66n5bkix', 
-              center: defaultLocation,
-              zoom: 12,
-            });
-            
-            map.addControl(new mapboxgl.NavigationControl());
-            
-            const geolocateControl = new mapboxgl.GeolocateControl({
-              positionOptions: { enableHighAccuracy: true },
-              trackUserLocation: true,
-              showUserHeading: true,
-            });
-            
-            map.addControl(geolocateControl);
-
-            // When user location is found through the geolocation control
-            geolocateControl.on('geolocate', (position) => {
-              console.log("Geolocated user position:", position.coords);
-              userLocation = [position.coords.longitude, position.coords.latitude];
-              
-              // This is key - expose the location to Flutter
-              window.userLocation = userLocation;
-              console.log("Set window.userLocation:", window.userLocation);
-              
-              updateUserMarker();
-            });
-
-            // When map is loaded, force a location update
-            map.on('load', () => {
-              console.log("Map loaded, forcing location update");
-              setTimeout(() => {
-                forceUpdateLocation();
-              }, 1000);
-            });
-            
-            console.log("Map initialization complete");
-          } else if (retries > 0) {
-            setTimeout(() => tryInitialize(retries - 1), 500);
-          } else {
-            console.error("Container 'mapbox-map' not found after retries");
-          }
-        };
+      // 3.8: Map initialization function (UPDATED to use custom tiles and remove attribution)(UPDATED with fallback style)
+function initializeMap() {
+  const tryInitialize = (retries) => {
+    const container = document.getElementById('mapbox-map');
+    if (container) {
+      console.log("Initializing map...");
+      const defaultLocation = [-122.4194, 37.7749];
+      
+      // Try to initialize with the custom style first
+      try {
+        map = new maplibregl.Map({
+          container: 'mapbox-map',
+          style: 'https://api.maptiler.com/maps/dataviz-dark/style.json?key=83SGEp18EIPVKCkod8ae', // Use a known working style as fallback
+          center: defaultLocation,
+          zoom: 12,
+          attributionControl: false // This removes the attribution/trademarks
+        });
         
-        tryInitialize(10);
-      }
+        // Add the navigation control
+        map.addControl(new maplibregl.NavigationControl());
+        
+        const geolocateControl = new maplibregl.GeolocateControl({
+          positionOptions: { enableHighAccuracy: true },
+          trackUserLocation: true,
+          showUserHeading: true,
+        });
+        
+        map.addControl(geolocateControl);
 
-      // Fix for map rendering issue after inspector is closed
+        // When user location is found through the geolocation control
+        geolocateControl.on('geolocate', (position) => {
+          console.log("Geolocated user position:", position.coords);
+          userLocation = [position.coords.longitude, position.coords.latitude];
+          
+          // This is key - expose the location to Flutter
+          window.userLocation = userLocation;
+          console.log("Set window.userLocation:", window.userLocation);
+          
+          updateUserMarker();
+        });
+
+        // When map is loaded, force a location update
+        map.on('load', () => {
+          console.log("Map loaded, forcing location update");
+          setTimeout(() => {
+            forceUpdateLocation();
+          }, 1000);
+        });
+        
+        console.log("Map initialization complete");
+      } catch (error) {
+        console.error("Error initializing map:", error);
+        
+        // If custom style fails, try with a fallback style
+        try {
+          console.log("Trying with fallback style...");
+          map = new maplibregl.Map({
+            container: 'mapbox-map',
+            style: 'https://demotiles.maplibre.org/style.json', // Known working style
+            center: defaultLocation,
+            zoom: 12,
+            attributionControl: false
+          });
+          
+          map.addControl(new maplibregl.NavigationControl());
+          
+          const geolocateControl = new maplibregl.GeolocateControl({
+            positionOptions: { enableHighAccuracy: true },
+            trackUserLocation: true,
+            showUserHeading: true,
+          });
+          
+          map.addControl(geolocateControl);
+          
+          // Same event handlers as above
+          geolocateControl.on('geolocate', (position) => {
+            console.log("Geolocated user position:", position.coords);
+            userLocation = [position.coords.longitude, position.coords.latitude];
+            window.userLocation = userLocation;
+            updateUserMarker();
+          });
+          
+          map.on('load', () => {
+            console.log("Map loaded with fallback style, forcing location update");
+            setTimeout(() => {
+              forceUpdateLocation();
+            }, 1000);
+          });
+        } catch (fallbackError) {
+          console.error("Error initializing map with fallback style:", fallbackError);
+        }
+      }
+    } else if (retries > 0) {
+      setTimeout(() => tryInitialize(retries - 1), 500);
+    } else {
+      console.error("Container 'mapbox-map' not found after retries");
+    }
+  };
+  
+  tryInitialize(10);
+}
+
+      // 3.9: Map resizing handlers
       window.addEventListener('resize', () => {
         if (map) {
           // Force map to resize
@@ -370,7 +497,7 @@
         }
       });
 
-      // Additional event listener for devtools opening/closing
+      // 3.10: Additional resize monitoring
       let lastHeight = window.innerHeight;
       setInterval(() => {
         if (lastHeight != window.innerHeight) {
@@ -385,7 +512,7 @@
         }
       }, 500);
 
-      // Prevent scrolling over dialog
+      // 3.11: Event listeners for dialog interactions
       document.addEventListener('wheel', function(e) {
         const targetElement = e.target;
         
@@ -396,13 +523,108 @@
         }
       }, { passive: false });
 
+      // 3.12: Initialize map on page load (UPDATED to include age verification)
       window.addEventListener('load', () => {
         console.log("Window loaded, initializing map...");
         setTimeout(initializeMap, 500);
+        // Check age verification after a small delay to ensure modal is rendered
+        setTimeout(handleAgeVerification, 1000);
       });
+      
+      // 3.13: Prevent map interaction when dialogs are open
+      function preventMapInteraction() {
+        // Handle mouse wheel events
+        document.addEventListener('wheel', function(e) {
+          if (e.target.closest('.flutter-dialog') || 
+              e.target.closest('flt-glass-pane') || // This targets Flutter overlay
+              e.target.closest('.stop-propagation')) {
+            e.stopPropagation();
+            e.preventDefault();
+          }
+        }, { passive: false });
+        
+        // Handle touch events for mobile
+        document.addEventListener('touchmove', function(e) {
+          if (e.target.closest('.flutter-dialog') || 
+              e.target.closest('flt-glass-pane') ||
+              e.target.closest('.stop-propagation')) {
+            // Don't prevent default completely as it will stop scrolling in the dialog
+            // Just stop it from propagating to the map
+            e.stopPropagation();
+          }
+        }, { passive: false });
+        
+        // 3.13.1: Disable map interactions
+        window.disableMapInteractions = function() {
+          if (map) {
+            map.dragPan.disable();
+            map.scrollZoom.disable();
+            map.touchZoomRotate.disable();
+            console.log("Map interactions disabled");
+          }
+        };
+        
+        // 3.13.2: Enable map interactions
+        window.enableMapInteractions = function() {
+          if (map) {
+            map.dragPan.enable();
+            map.scrollZoom.enable();
+            map.touchZoomRotate.enable();
+            console.log("Map interactions enabled");
+          }
+        };
+      }
+
+      // 3.14: Age verification handler
+      function handleAgeVerification() {
+        const ageVerified = localStorage.getItem('ageVerified');
+        const modal = document.getElementById('age-verification-modal');
+        
+        if (!ageVerified) {
+          // Show the modal
+          modal.style.display = 'flex';
+          
+          // Disable map interactions while modal is open
+          if (window.disableMapInteractions) {
+            window.disableMapInteractions();
+          }
+          
+          // Add event listeners for the buttons
+          document.getElementById('confirm-age').addEventListener('click', function() {
+            localStorage.setItem('ageVerified', 'true');
+            modal.style.display = 'none';
+            
+            // Re-enable map interactions
+            if (window.enableMapInteractions) {
+              window.enableMapInteractions();
+            }
+          });
+          
+          document.getElementById('decline-age').addEventListener('click', function() {
+            // Redirect to a safe page or display another message
+            document.body.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100vh;"><h1>You must be 18 or older to access this site</h1></div>';
+          });
+        }
+      }
+
+      // Call this after map initialization
+      preventMapInteraction();
     </script>
   </head>
   <body>
+    <!-- Age verification modal -->
+    <div id="age-verification-modal">
+      <div class="modal-content">
+        <div class="modal-title">Age Verification</div>
+        <div class="modal-message">
+          This website is intended for users who are 18 years of age or older.
+          By entering, you confirm that you are at least 18 years old.
+        </div>
+        <button id="confirm-age" class="modal-button">Yes, I am 18 or older</button>
+        <button id="decline-age" class="modal-button modal-button-secondary">No, I am under 18</button>
+      </div>
+    </div>
+    
     <script src="main.dart.js"></script>
   </body>
 </html>

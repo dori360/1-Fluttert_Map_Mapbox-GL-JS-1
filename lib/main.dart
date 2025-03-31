@@ -136,13 +136,15 @@ Future<void> main() async {
   );
 
   // 2.3: Register MapLibre view factory
-  ui.platformViewRegistry.registerViewFactory('mapbox-gl-element', (int viewId) {
-    final div = DivElement()
-      ..id = 'mapbox-map'
-      ..style.width = '100%'
-      ..style.height = '100%';
-    return div;
-  });
+ui.platformViewRegistry.registerViewFactory('mapbox-gl-element', (int viewId) {
+  final div = DivElement()
+    ..id = 'mapbox-map'
+    ..style.width = '100%'
+    ..style.height = '100%'
+    ..style.border = '2px solid #808080'  // Add grey border directly to the element
+    ..style.boxSizing = 'border-box';     // Ensure border is included in dimensions
+  return div;
+});
 
   // 2.4: Register JavaScript user profile callback
   js.context['showUserProfile'] = (String userId) {
@@ -1594,50 +1596,67 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   // 6.7: Visibility settings dialog
-  void _showVisibilitySettingsDialog(BuildContext context) {
-    js.context.callMethod('closeAllPopups');
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Visibility Settings'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Control who can see you on the map'),
-            const SizedBox(height: 16),
-            Text('Visibility radius: ${_visibilityRadius.toStringAsFixed(1)} miles'),
-            Slider(
-              value: _visibilityRadius,
-              min: 1.0,
-              max: 50.0,
-              divisions: 49,
-              label: _visibilityRadius.toStringAsFixed(1) + ' miles',
-              onChanged: (value) {
-                setState(() {
-                  _visibilityRadius = value;
-                });
-              },
-            ),
-          ],
+void _showVisibilitySettingsDialog(BuildContext context) {
+  js.context.callMethod('closeAllPopups');
+  
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: Color(0xFFF8F8FF), // Added off-white background color
+      title: const Text(
+        'Visibility Settings',
+        style: TextStyle(
+          color: Color(0xFF0D1B2A), // Dark blue
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              // Re-fetch users when radius changes
-              _startFetchingUserLocations();
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Control who can see you on the map'),
+          const SizedBox(height: 16),
+          Text('Visibility radius: ${_visibilityRadius.toStringAsFixed(1)} miles'),
+          Slider(
+            value: _visibilityRadius,
+            min: 1.0,
+            max: 50.0,
+            divisions: 49,
+            label: _visibilityRadius.toStringAsFixed(1) + ' miles',
+            activeColor: Color(0xFF0D1B2A), // Changed to dark blue
+            thumbColor: Color(0xFF0D1B2A), // Changed to dark blue
+            onChanged: (value) {
+              setState(() {
+                _visibilityRadius = value;
+              });
             },
-            child: const Text('Save'),
           ),
         ],
       ),
-    );
-  }
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          style: TextButton.styleFrom(
+            foregroundColor: Color(0xFF0D1B2A), // Dark blue
+          ),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+            // Re-fetch users when radius changes
+            _startFetchingUserLocations();
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Color(0xFF0D1B2A), // Dark blue
+            foregroundColor: Color(0xFFF8F8FF), // Off-white
+          ),
+          child: const Text('Save'),
+        ),
+      ],
+    ),
+  );
+}
 
   // 6.8: User profile dialog
   void _showUserProfile(String userId) {
@@ -1926,47 +1945,51 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Color(0xFF0D1B2A), // Very dark blue, almost black
-        title: const Text(
-          "Rimmies",
-          style: TextStyle(
-            fontSize: 24, // Increased from default
-            fontWeight: FontWeight.bold,
-            color: Colors.white, // Add this line to make the text white
-          ),
-        ),
-        centerTitle: true,  // Add this line
-        toolbarHeight: 70, // Increased from default ~56
-        actions: [
-          StreamBuilder<User?>(
-            stream: FirebaseAuth.instance.userChanges(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: CircularProgressIndicator(color: Colors.white),
-                );
-              }
-              
-              final user = snapshot.data;
-              final photoURL = user?.photoURL;
-              
-              // Set profile picture in JavaScript
-              if (photoURL != null) {
-                js.context.callMethod('setProfilePicture', [photoURL]);
-              }
-              
-              return Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: PopupMenuButton<String>(
-                  onSelected: (value) => _handleMenuSelection(context, value),
-                  icon: CircleAvatar(
-                    radius: 24, // Increased from 20
-                    backgroundImage: photoURL != null ? NetworkImage(photoURL) : null,
-                    child: photoURL == null ? const Icon(Icons.account_circle, size: 48) : null,
-                  ),
-                  tooltip: "Show menu",
+appBar: AppBar(
+  backgroundColor: Color(0xFF0D1B2A), // Very dark blue, almost black
+  title: const Text(
+    "Rimmies",
+    style: TextStyle(
+      fontSize: 24, 
+      fontWeight: FontWeight.bold,
+      fontFamily: 'Montserrat', // Added elegant font
+      color: Colors.white,
+    ),
+  ),
+  centerTitle: true,
+  toolbarHeight: 50, // Changed from 70 to 42 (60% of original)
+  actions: [
+    StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.userChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.all(4.0),
+            child: CircularProgressIndicator(color: Colors.white),
+          );
+        }
+        
+        final user = snapshot.data;
+        final photoURL = user?.photoURL;
+        
+        // Set profile picture in JavaScript
+        if (photoURL != null) {
+          js.context.callMethod('setProfilePicture', [photoURL]);
+        }
+        
+        // Use a Stack to position the profile picture properly
+        return Container(
+          height: 42, // Match AppBar height
+          alignment: Alignment.center,
+          child: PopupMenuButton<String>(
+            onSelected: (value) => _handleMenuSelection(context, value),
+            padding: EdgeInsets.zero, // Remove internal padding
+            icon: CircleAvatar(
+              radius: 24, // Keep original size
+              backgroundImage: photoURL != null ? NetworkImage(photoURL) : null,
+              child: photoURL == null ? const Icon(Icons.account_circle, size: 48) : null,
+            ),
+            tooltip: "Show menu",
                   // Position the menu directly below the button
                   offset: const Offset(0, 0),
                   constraints: const BoxConstraints(
@@ -2135,70 +2158,86 @@ class _MapScreenState extends State<MapScreen> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 // Groups button
-                FloatingActionButton(
-                  onPressed: () => _showGroupsDialog(context),
-                  backgroundColor: Colors.purple,
-                  elevation: 4,
-                  mini: true,
-                  heroTag: 'groups',
-                  child: const Icon(Icons.group, size: 24),
-                ),
-                const SizedBox(height: 10),
-                
-                // Visibility settings button
-                FloatingActionButton(
-                  onPressed: () => _showVisibilitySettingsDialog(context),
-                  backgroundColor: Colors.green,
-                  elevation: 4,
-                  mini: true,
-                  heroTag: 'visibility',
-                  child: const Icon(Icons.visibility, size: 24),
-                ),
-                const SizedBox(height: 10),
-                
-                // Messages button with notification badge
-// Messages button with notification badge
-Stack(
-  clipBehavior: Clip.none,
-  children: [
-    FloatingActionButton(
-      onPressed: () => _showMessagesDialog(context),
-      backgroundColor: Colors.purple,  // Changed to match other buttons
-      elevation: 4,
-      mini: true,  // Made mini to match other buttons
-      heroTag: 'messages',
-      child: const Icon(Icons.message, size: 24),  // Reduced size to match others
-    ),
-    if (_hasUnreadMessages)
-      Positioned(
-        top: -5,
-        right: -5,
-        child: Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: Colors.red,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2),
-          ),
-          constraints: const BoxConstraints(
-            minWidth: 22,
-            minHeight: 22,
-          ),
-          child: Text(
-            _unreadCount > 99 ? '99+' : _unreadCount.toString(),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
-            textAlign: TextAlign.center,
-          ),
+      FloatingActionButton(
+        onPressed: () => _showGroupsDialog(context),
+        backgroundColor: Color(0xFF0D1B2A), // Dark blue to match app bar
+        foregroundColor: Color(0xFFF8F8FF), // Off-white
+        elevation: 4,
+        mini: true,
+        heroTag: 'groups',
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(28.0),
+          side: BorderSide(color: Color(0xFFF8F8FF), width: 2),
         ),
+        child: const Icon(Icons.group, size: 24),
       ),
-  ],
-),              ],
+      const SizedBox(height: 10),
+                // Visibility settings button
+      FloatingActionButton(
+        onPressed: () => _showVisibilitySettingsDialog(context),
+        backgroundColor: Color(0xFF0D1B2A), // Dark blue to match app bar
+        foregroundColor: Color(0xFFF8F8FF), // Off-white
+        elevation: 4,
+        mini: true,
+        heroTag: 'visibility',
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(28.0),
+          side: BorderSide(color: Color(0xFFF8F8FF), width: 2),
+        ),
+        child: const Icon(Icons.visibility, size: 24),
+      ),
+      const SizedBox(height: 10),
+      // Messages button with notification badge
+
+      Stack(
+        clipBehavior: Clip.none,
+        children: [
+          FloatingActionButton(
+            onPressed: () => _showMessagesDialog(context),
+            backgroundColor: Color(0xFF0D1B2A), // Dark blue to match app bar
+            foregroundColor: Color(0xFFF8F8FF), // Off-white
+            elevation: 4,
+            mini: true,
+            heroTag: 'messages',
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28.0),
+              side: BorderSide(color: Color(0xFFF8F8FF), width: 2),
             ),
+            child: const Icon(Icons.message, size: 24),
           ),
+          if (_hasUnreadMessages)
+            Positioned(
+              top: -5,
+              right: -5,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                constraints: const BoxConstraints(
+                  minWidth: 22,
+                  minHeight: 22,
+                ),
+                child: Text(
+                  _unreadCount > 99 ? '99+' : _unreadCount.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
+      ),
+    ],
+  ),
+),
+
+
         ],
       ),
     );
@@ -2366,39 +2405,39 @@ class _GroupsDialogState extends State<GroupsDialog> {
       // This prevents gesture events from propagating to the map
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Color(0xFFF8F8FF), 
           borderRadius: BorderRadius.circular(20),
         ),
         child: Column(
           children: [
             // Header
-            Container(
-              padding: const EdgeInsets.all(16.0),
-              decoration: BoxDecoration(
-                color: Colors.purple,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  topRight: Radius.circular(20),
-                ),
-              ),
-              child: Row(
-                children: [
-                  const Text(
-                    "Groups",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-            ),
+Container(
+  padding: const EdgeInsets.all(16.0),
+  decoration: BoxDecoration(
+    color: Color(0xFF0D1B2A), // Changed to dark blue from purple
+    borderRadius: const BorderRadius.only(
+      topLeft: Radius.circular(20),
+      topRight: Radius.circular(20),
+    ),
+  ),
+  child: Row(
+    children: [
+      const Text(
+        "Groups",
+        style: TextStyle(
+          color: Color(0xFFF8F8FF), // Changed to off-white
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      const Spacer(),
+      IconButton(
+        icon: const Icon(Icons.close, color: Color(0xFFF8F8FF)), // Changed to off-white
+        onPressed: () => Navigator.of(context).pop(),
+      ),
+    ],
+  ),
+),
             
             // Visibility Settings
             Padding(
@@ -2421,36 +2460,36 @@ class _GroupsDialogState extends State<GroupsDialog> {
             ),
             
             // Action buttons
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.add),
-                      label: const Text('Create Group'),
-                      onPressed: widget.onCreateGroup,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.purple,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.star),
-                      label: const Text('Upgrade'),
-                      onPressed: widget.onSubscribe,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.amber,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+Padding(
+  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+  child: Row(
+    children: [
+      Expanded(
+        child: ElevatedButton.icon(
+          icon: const Icon(Icons.add),
+          label: const Text('Create Group'),
+          onPressed: widget.onCreateGroup,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Color(0xFF0D1B2A), // Changed to dark blue
+            foregroundColor: Color(0xFFF8F8FF), // Changed to off-white
+          ),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: ElevatedButton.icon(
+          icon: const Icon(Icons.star),
+          label: const Text('Upgrade'),
+          onPressed: widget.onSubscribe,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Color(0xFF0D1B2A), // Changed to dark blue from amber
+            foregroundColor: Color(0xFFF8F8FF), // Changed to off-white
+          ),
+        ),
+      ),
+    ],
+  ),
+),
             
             // Tabs for My Groups and Nearby Groups
             DefaultTabController(
@@ -2458,19 +2497,19 @@ class _GroupsDialogState extends State<GroupsDialog> {
               child: Expanded(
                 child: Column(
                   children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.grey[200],
-                      ),
-                      child: const TabBar(
-                        tabs: [
-                          Tab(text: 'My Groups'),
-                          Tab(text: 'Nearby Groups'),
-                        ],
-                        labelColor: Colors.purple,
-                        indicatorColor: Colors.purple,
-                      ),
-                    ),
+Container(
+  decoration: BoxDecoration(
+    color: Colors.grey[200],
+  ),
+  child: TabBar(
+    tabs: [
+      Tab(text: 'My Groups'),
+      Tab(text: 'Nearby Groups'),
+    ],
+    labelColor: Color(0xFF0D1B2A), // Changed to dark blue from purple
+    indicatorColor: Color(0xFF0D1B2A), // Changed to dark blue from purple
+  ),
+),
                     Expanded(
                       child: TabBarView(
                         children: [
@@ -3763,39 +3802,39 @@ class _MessagesDialogState extends State<MessagesDialog> {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+      color: Color(0xFFF8F8FF), // Changed to off-white background
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         children: [
           // Header
-          Container(
-            padding: const EdgeInsets.all(16.0),
-            decoration: const BoxDecoration(
-              color: Colors.blue,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-              ),
-            ),
-            child: Row(
-              children: [
-                const Text(
-                  "Messages",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
-          ),
+Container(
+  padding: const EdgeInsets.all(16.0),
+  decoration: const BoxDecoration(
+    color: Color(0xFF0D1B2A), // Changed to dark blue to match app bar
+    borderRadius: BorderRadius.only(
+      topLeft: Radius.circular(20),
+      topRight: Radius.circular(20),
+    ),
+  ),
+  child: Row(
+    children: [
+      const Text(
+        "Messages",
+        style: TextStyle(
+          color: Color(0xFFF8F8FF), // Changed to off-white
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      const Spacer(),
+      IconButton(
+        icon: const Icon(Icons.close, color: Color(0xFFF8F8FF)), // Changed to off-white
+        onPressed: () => Navigator.of(context).pop(),
+      ),
+    ],
+  ),
+),
           
           // Message list or loading indicator
           Expanded(
@@ -4573,4 +4612,3 @@ class _SignUpDialogState extends State<SignUpDialog> {
     );
   }
 }
-
