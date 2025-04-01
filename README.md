@@ -49,4 +49,13 @@ Made the  all buttons on bottom left the same size.
 # V1.1.2
 New circular style for the buttons and line around the map area. 
 
-
+# V1.1.3
+    Adjust the profile settings : 
+        1- Users can delete accounts, reset passwords
+        2- Users can add groups 
+        3- Add tab in the middle to switch between dating and friends. 
+        
+# V1.1.4
+    Users have to email verify now and get sent an email.
+    display name shows correctly. 
+    But email doesn't get sent on 1st try. 

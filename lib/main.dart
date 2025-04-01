@@ -1,4 +1,3 @@
-
 import 'dart:html' hide VoidCallback; // Hide VoidCallback to avoid conflict
 import 'dart:ui_web' as ui;
 import 'dart:typed_data';
@@ -130,10 +129,32 @@ Future<void> main() async {
   );
 
   // 2.2: Configure Firestore settings
+try {
+  // Apply settings before ANY other Firestore operations
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
     cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
   );
+  
+  // Only try to enable persistence in a try-catch, don't print detailed errors
+  try {
+    FirebaseFirestore.instance.enablePersistence(
+      const PersistenceSettings(synchronizeTabs: true)
+    );
+    // Remove excessive logging
+  } catch (e) {
+    // Just silently handle this error - persistence may already be enabled
+  }
+} catch (e) {
+  try {
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: false,
+    );
+    // Remove excessive logging
+  } catch (settingsError) {
+    // No need for detailed error logging
+  }
+}
 
   // 2.3: Register MapLibre view factory
 ui.platformViewRegistry.registerViewFactory('mapbox-gl-element', (int viewId) {
@@ -243,60 +264,65 @@ class _MapScreenState extends State<MapScreen> {
   StreamSubscription<QuerySnapshot>? _messagesSubscription;
   
   // 4.2.2: Init state method
-  @override
-  void initState() {
-    super.initState();
-    
-    // Register the callback for user clicks from JavaScript
-    js.context['appCallbacks'] = js.JsObject.jsify({
-      'handleUserClick': (String userId) {
-        print("Handling user click for: $userId");
-        _showUserProfile(userId);
-      }
-    });
-    
-    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
-      if (user != null) {
-        print("User logged in: ${user.uid} - Email: ${user.email}");
-        setState(() {
-          _currentUserId = user.uid;
-          _isUserLoggedIn = true;
-        });
-        js.context.callMethod('setCurrentUserId', [_currentUserId]);
-        
-        // Update online status when logging in
-        _updateOnlineStatus(true);
-        
-        // Start listening for unread messages
-        _startListeningForUnreadMessages();
-        
-        // Force location update when logging in
-        _forceLocationUpdate();
-        
-        // Update location once and start fetching other users
-        _updateUserLocation(); // Single update instead of starting timer
-        _startFetchingUserLocations();
-      } else {
-        print("User logged out");
-        
-        // Update online status when logging out (if we had a user ID before)
-        if (_currentUserId != null) {
-          _updateOnlineStatus(false);
-        }
-        
-        setState(() {
-          _currentUserId = null;
-          _isUserLoggedIn = false;
-          _hasUnreadMessages = false;
-          _unreadCount = 0;
-        });
-        _stopLocationUpdates();
-        _stopFetchingUserLocations();
-        _stopListeningForUnreadMessages();
-      }
-    });
-  }
+@override
+void initState() {
+  super.initState();
+  
+  // Register the callback for user clicks from JavaScript
+  js.context['appCallbacks'] = js.JsObject.jsify({
+    'handleUserClick': (String userId) {
+      print("Handling user click for: $userId");
+      _showUserProfile(userId);
+    }
+  });
 
+_authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
+  if (user != null) {
+    // Add this verification check
+    if (!user.emailVerified) {
+      print("User email not verified - forcing sign out");
+      FirebaseAuth.instance.signOut();
+      return;
+    }
+      
+      setState(() {
+        _currentUserId = user.uid;
+        _isUserLoggedIn = true;
+      });
+      js.context.callMethod('setCurrentUserId', [_currentUserId]);
+      
+      // Update online status when logging in
+      _updateOnlineStatus(true);
+      
+      // Start listening for unread messages
+      _startListeningForUnreadMessages();
+      
+      // Force location update when logging in
+      _forceLocationUpdate();
+      
+      // Update location once and start fetching other users
+      _updateUserLocation(); // Single update instead of starting timer
+      _startFetchingUserLocations();
+    } else {
+      print("User logged out");
+      
+      // Update online status when logging out (if we had a user ID before)
+      if (_currentUserId != null) {
+        _updateOnlineStatus(false);
+      }
+      
+      setState(() {
+        _currentUserId = null;
+        _isUserLoggedIn = false;
+        _hasUnreadMessages = false;
+        _unreadCount = 0;
+      });
+      _stopLocationUpdates();
+      _stopFetchingUserLocations();
+      _stopListeningForUnreadMessages();
+    }
+  });
+}
   // 4.2.3: Dispose method
   @override
   void dispose() {
@@ -1660,6 +1686,8 @@ void _showVisibilitySettingsDialog(BuildContext context) {
 
   // 6.8: User profile dialog
   void _showUserProfile(String userId) {
+    
+    
     // Close any open popups before showing profile
     js.context.callMethod('closeAllPopups');
     
@@ -2638,7 +2666,6 @@ Container(
     );
   }
 }
-
 //==============================================================================
 // SECTION 8: USER PROFILE DIALOG
 //==============================================================================
@@ -2731,7 +2758,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
         heightController.text = profileData.height?.toString() ?? '';
         weightController.text = profileData.weight?.toString() ?? '';
         bodyTypeController.text = profileData.bodyType ?? '';
-sexualityController.text = profileData.sexuality ?? '';
+        sexualityController.text = profileData.sexuality ?? '';
         descriptionController.text = profileData.description ?? '';
       }
       
@@ -4331,23 +4358,117 @@ class _SignInDialogState extends State<SignInDialog> {
   String _email = '';
   String _password = '';
   String _errorMessage = '';
+  bool _isLoading = false; // Moved to a single declaration
 
   // 11.2.2: Sign in method
   Future<void> _signIn() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
+      
+      setState(() {
+        _isLoading = true;
+        _errorMessage = '';
+      });
+      
       try {
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
+        final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: _email,
           password: _password,
         );
-        if (context.mounted) Navigator.of(context).pop();
+        
+        final user = userCredential.user;
+        if (user != null) {
+          // Reload user to get fresh verification status
+          await user.reload();
+          
+          if (!user.emailVerified) {
+            // Sign out if not verified
+            await FirebaseAuth.instance.signOut();
+            
+            setState(() {
+              _isLoading = false;
+              _errorMessage = 'Please verify your email before signing in. Check your inbox for the verification link.';
+            });
+            
+            _showResendVerificationDialog();
+            return;
+          }
+          
+          // Email is verified, proceed with login
+          setState(() {
+            _isLoading = false;
+          });
+          if (context.mounted) Navigator.of(context).pop();
+        }
       } on FirebaseAuthException catch (e) {
         setState(() {
+          _isLoading = false;
           _errorMessage = e.message ?? 'An error occurred during sign-in.';
         });
       }
     }
+  }
+
+  // Add this method to show resend verification dialog
+  void _showResendVerificationDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('Email Not Verified'),
+        content: const Text(
+          'Your email has not been verified yet. Would you like us to send another verification email?'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              
+              setState(() {
+                _isLoading = true;
+              });
+              
+              try {
+                // Sign in again to get user object
+                final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+                  email: _email,
+                  password: _password,
+                );
+                
+                if (userCredential.user != null) {
+                  // Send verification email
+                  await userCredential.user!.sendEmailVerification();
+                  // Sign out again
+                  await FirebaseAuth.instance.signOut();
+                  
+                  if (context.mounted) {
+                    setState(() {
+                      _isLoading = false;
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Verification email sent. Please check your inbox.'))
+                    );
+                  }
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  setState(() {
+                    _isLoading = false;
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error sending verification email: $e'))
+                  );
+                }
+              }
+            },
+            child: const Text('Resend Email'),
+          ),
+        ],
+      ),
+    );
   }
 
   // 11.2.3: Build method
@@ -4366,84 +4487,86 @@ class _SignInDialogState extends State<SignInDialog> {
         borderRadius: BorderRadius.circular(20),
         child: Padding(
           padding: const EdgeInsets.all(20.0),
-          child: Form(
-            key: _formKey,
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                const Text(
-                  "Sign In",
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue,
+          child: _isLoading 
+              ? const Center(child: CircularProgressIndicator())
+              : Form(
+                  key: _formKey,
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      const Text(
+                        "Sign In",
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
+                      if (_errorMessage.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.red[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.red[200]!),
+                          ),
+                          child: Text(
+                            _errorMessage, 
+                            style: TextStyle(color: Colors.red[800]),
+                          ),
+                        ),
+                      TextFormField(
+                        decoration: const InputDecoration(
+                          labelText: 'Email',
+                          prefixIcon: Icon(Icons.email),
+                        ),
+                        onSaved: (value) => _email = value!.trim(),
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (value) => value!.isEmpty ? 'Please enter your email.' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        decoration: const InputDecoration(
+                          labelText: 'Password',
+                          prefixIcon: Icon(Icons.lock),
+                        ),
+                        onSaved: (value) => _password = value!.trim(),
+                        obscureText: true,
+                        validator: (value) =>
+                            value!.length < 6 ? 'Password must be at least 6 characters.' : null,
+                      ),
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            
+                            final _MapScreenState mapState = context.findAncestorStateOfType<_MapScreenState>()!;
+                            mapState._showResetPasswordDialog(context);
+                          },
+                          child: const Text('Forgot Password?'),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _signIn,
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: const Text('Sign In'),
+                      ),
+                      const SizedBox(height: 10),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                    ],
                   ),
-                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 20),
-                if (_errorMessage.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.red[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red[200]!),
-                    ),
-                    child: Text(
-                      _errorMessage, 
-                      style: TextStyle(color: Colors.red[800]),
-                    ),
-                  ),
-                TextFormField(
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    prefixIcon: Icon(Icons.email),
-                  ),
-                  onSaved: (value) => _email = value!.trim(),
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (value) => value!.isEmpty ? 'Please enter your email.' : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  decoration: const InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: Icon(Icons.lock),
-                  ),
-                  onSaved: (value) => _password = value!.trim(),
-                  obscureText: true,
-                  validator: (value) =>
-                      value!.length < 6 ? 'Password must be at least 6 characters.' : null,
-                ),
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      
-                      final _MapScreenState mapState = context.findAncestorStateOfType<_MapScreenState>()!;
-                      mapState._showResetPasswordDialog(context);
-                    },
-                    child: const Text('Forgot Password?'),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: _signIn,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  child: const Text('Sign In'),
-                ),
-                const SizedBox(height: 10),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );
@@ -4454,69 +4577,157 @@ class _SignInDialogState extends State<SignInDialog> {
 class SignUpDialog extends StatefulWidget {
   const SignUpDialog({super.key});
 
-  // 11.3.1: Create state method
   @override
   _SignUpDialogState createState() => _SignUpDialogState();
 }
 
-// 11.4: Sign Up Dialog State
 class _SignUpDialogState extends State<SignUpDialog> {
-  // 11.4.1: State variables
   final _formKey = GlobalKey<FormState>();
   String _email = '';
   String _password = '';
   String _displayName = '';
   String _errorMessage = '';
+  bool _isLoading = false;
 
-  // 11.4.2: Sign up method
   Future<void> _signUp() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
+      
+      setState(() {
+        _isLoading = true;
+        _errorMessage = '';
+      });
+      
       try {
+        // DIAGNOSTIC: Log signup attempt details
+        print("🔐 Signup Attempt Details:");
+        print("📧 Email: $_email");
+        print("👤 Display Name: $_displayName");
+        
+        // CREATE USER WITH EMAIL AND PASSWORD
         final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: _email,
           password: _password,
         );
         final user = userCredential.user;
+        
         if (user != null) {
-          await user.updateDisplayName(_displayName);
+          // COMPREHENSIVE USER PROFILE UPDATE
+          // Ensure display name and photo are set consistently
+          print("✅ User Created: Updating Profile");
           
-          // Create user documents
+          await user.updateProfile(
+            displayName: _displayName,
+            // GENERATE AVATAR BASED ON DISPLAY NAME
+            photoURL: 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(_displayName)}&size=150'
+          );
+          
+          // SEND EMAIL VERIFICATION
+          await user.sendEmailVerification();
+          
+          // CREATE CONSISTENT USER DOCUMENTS
+          print("📝 Creating User Documents");
           await Future.wait([
+            // USERS COLLECTION: Basic User Info
             FirebaseFirestore.instance.collection('users').doc(user.uid).set({
               'displayName': _displayName,
               'email': _email,
               'createdAt': FieldValue.serverTimestamp(),
+              'emailVerified': false,
             }),
             
+            // USER LOCATIONS: Tracking and Online Status
             FirebaseFirestore.instance.collection('user_locations').doc(user.uid).set({
-              'displayName': _displayName,
-              'photoURL': user.photoURL ?? 'https://via.placeholder.com/40',
+              'displayName': _displayName, // CRITICAL: Set display name here
+              'photoURL': 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(_displayName)}&size=150',
               'lastUpdated': DateTime.now().millisecondsSinceEpoch,
-              'isOnline': true,
+              'isOnline': false,
               'lastOnline': DateTime.now().millisecondsSinceEpoch,
+              'longitude': 0.0,
+              'latitude': 0.0,
             }),
             
-            // Initialize user profile with default settings
+            // USER PROFILES: Additional Profile Settings
             FirebaseFirestore.instance.collection('user_profiles').doc(user.uid).set({
               'displayName': _displayName,
               'unitSystem': 'metric',
             }),
           ]);
           
-          if (context.mounted) Navigator.of(context).pop();
+          // RELOAD USER TO ENSURE PROFILE UPDATES ARE REFLECTED
+          await user.reload();
+          
+          // DIAGNOSTIC: Verify User State
+          print("🔍 User State After Signup:");
+          print("👤 Display Name: ${user.displayName}");
+          print("📸 Profile Picture: ${user.photoURL}");
+          
+          // SIGN OUT TO ENFORCE EMAIL VERIFICATION
+          await FirebaseAuth.instance.signOut();
+          
+          setState(() {
+            _isLoading = false;
+          });
+          
+          if (context.mounted) {
+            _showVerificationSentDialog();
+          }
         }
       } on FirebaseAuthException catch (e) {
-        setState(() {
-          _errorMessage = e.message ?? 'An error occurred during sign up.';
-        });
+        // ERROR HANDLING: Authentication Errors
+        print("❌ Firebase Auth Error: ${e.message}");
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = e.message ?? 'An error occurred during sign up.';
+          });
+        }
       } catch (e) {
-        setState(() {
-          _errorMessage = 'An unexpected error occurred: $e';
-        });
+        // ERROR HANDLING: Unexpected Errors
+        print("❗ Unexpected Error: $e");
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'An unexpected error occurred: $e';
+          });
+        }
       }
     }
   }
+// Add this method to show verification sent dialog
+void _showVerificationSentDialog() {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext context) => AlertDialog(
+      title: const Text('Verify Your Email'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'A verification link has been sent to your email address. Please check your inbox and click the link to verify your account.',
+            style: TextStyle(fontSize: 16),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'You will need to verify your email before signing in.',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            // Close both dialogs
+            Navigator.of(context).pop(); // Close verification dialog
+            Navigator.of(context).pop(); // Close signup dialog
+          },
+          child: const Text('OK'),
+        ),
+      ],
+    ),
+  );
+}
 
   // 11.4.3: Build method
   @override
@@ -4531,10 +4742,12 @@ class _SignUpDialogState extends State<SignUpDialog> {
       child: Material(
         elevation: 4.0,
         borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Form(
-            key: _formKey,
+child: Padding(
+  padding: const EdgeInsets.all(20.0),
+  child: _isLoading 
+      ? const Center(child: CircularProgressIndicator())
+      : Form(
+          key: _formKey,
             child: ListView(
               shrinkWrap: true,
               children: [

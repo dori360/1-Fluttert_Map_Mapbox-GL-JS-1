@@ -1,4 +1,16 @@
-2025/03/31-12:31:59.535 2b03 Reusing MANIFEST /private/var/folders/63/mq1nxf5j0tg3z_2c2h6scnpc0000gn/T/flutter_tools.HJs4ch/flutter_tools_chrome_device.BSKsN7/Default/Session Storage/MANIFEST-000001
-2025/03/31-12:31:59.536 2b03 Recovering log #13
-2025/03/31-12:31:59.537 2b03 Reusing old log /private/var/folders/63/mq1nxf5j0tg3z_2c2h6scnpc0000gn/T/flutter_tools.HJs4ch/flutter_tools_chrome_device.BSKsN7/Default/Session Storage/000013.log 
-2025/03/31-12:31:59.538 2b03 Delete type=0 #4
+2025/03/31-15:08:58.209 2a07 Reusing MANIFEST /private/var/folders/63/mq1nxf5j0tg3z_2c2h6scnpc0000gn/T/flutter_tools.qtjC0o/flutter_tools_chrome_device.jEpCVY/Default/Session Storage/MANIFEST-000001
+2025/03/31-15:08:58.217 2a07 Recovering log #13
+2025/03/31-15:08:58.219 2a07 Reusing old log /private/var/folders/63/mq1nxf5j0tg3z_2c2h6scnpc0000gn/T/flutter_tools.qtjC0o/flutter_tools_chrome_device.jEpCVY/Default/Session Storage/000013.log 
+2025/03/31-15:08:58.220 2a07 Delete type=0 #4
+2025/03/31-15:51:11.257 2a07 Level-0 table #17: started
+2025/03/31-15:51:11.262 2a07 Level-0 table #17: 30043 bytes OK
+2025/03/31-15:51:11.269 2a07 Delete type=0 #13
+2025/03/31-15:51:11.274 2a07 Compacting 4@0 + 1@1 files
+2025/03/31-15:51:11.283 2a07 Generated table #18@0: 252 keys, 23014 bytes
+2025/03/31-15:51:11.286 2a07 Compacted 4@0 + 1@1 files => 23014 bytes
+2025/03/31-15:51:11.288 2a07 compacted to: files[ 0 1 1 0 0 0 0 ]
+2025/03/31-15:51:11.289 2a07 Delete type=2 #14
+2025/03/31-15:51:11.289 2a07 Delete type=2 #17
+2025/03/31-15:51:11.289 2a07 Delete type=2 #12
+2025/03/31-15:51:11.289 2a07 Delete type=2 #10
+2025/03/31-15:51:11.289 2a07 Delete type=2 #8
